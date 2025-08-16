@@ -8,8 +8,17 @@ export default function WebRTCPlayer({ whepUrl }: WebRTCProps) {
 	const videoRef = useRef<HTMLVideoElement>(null);
 
 	useEffect(() => {
+		let peerConn: RTCPeerConnection | null = null;
+
 		const goLive = async () => {
-			const peerConn = new RTCPeerConnection();
+			peerConn = new RTCPeerConnection({
+				iceServers: [
+					{
+						urls: ["stun:stun.l.google.com:19302"],
+					},
+				],
+			});
+			console.log("creating peer connection...");
 			peerConn.addTransceiver("video", { direction: "recvonly" });
 			peerConn.addTransceiver("audio", { direction: "recvonly" });
 
@@ -41,6 +50,8 @@ export default function WebRTCPlayer({ whepUrl }: WebRTCProps) {
 			await peerConn.setRemoteDescription({ type: "answer", sdp: answer });
 		};
 		goLive();
+
+		return () => peerConn?.close();
 	}, [whepUrl]);
 
 	const enableAudio = async () => {
@@ -66,7 +77,7 @@ export default function WebRTCPlayer({ whepUrl }: WebRTCProps) {
 				muted
 				playsInline
 				controls
-				style={{ widows: 640, height: 640, borderRadius: "0.5%" }}
+				style={{ width: 640, height: 640, borderRadius: "0.5%" }}
 			></video>
 			<button onClick={enableAudio}>Enable sound</button>
 		</div>
