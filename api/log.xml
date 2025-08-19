@@ -1,34 +1,34 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"
-    xmlns:e="http://www.w3.org/2003/05/soap-encoding"
-    xmlns:wsa="http://www.w3.org/2005/08/addressing" xmlns:xs="http://www.w3.org/2001/XMLSchema"
-    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-    xmlns:wsaw="http://www.w3.org/2006/05/addressing/wsdl"
-    xmlns:wsnt="http://docs.oasis-open.org/wsn/b-2" xmlns:wstop="http://docs.oasis-open.org/wsn/t-1"
-    xmlns:wsntw="http://docs.oasis-open.org/wsn/bw-2"
-    xmlns:wsrf-rw="http://docs.oasis-open.org/wsrf/rw-2"
-    xmlns:wsrf-r="http://docs.oasis-open.org/wsrf/r-2"
-    xmlns:wsrf-bf="http://docs.oasis-open.org/wsrf/bf-2"
-    xmlns:wsdl="http://schemas.xmlsoap.org/wsdl"
-    xmlns:wsoap12="http://schemas.xmlsoap.org/wsdl/soap12"
-    xmlns:http="http://schemas.xmlsoap.org/wsdl/http"
+    xmlns:enc="http://www.w3.org/2003/05/soap-encoding" xmlns:xs="http://www.w3.org/2001/XMLSchema"
+    xmlns:wsa="http://schemas.xmlsoap.org/ws/2004/08/addressing"
+    xmlns:wsa5="http://www.w3.org/2005/08/addressing"
     xmlns:d="http://schemas.xmlsoap.org/ws/2005/04/discovery"
-    xmlns:wsadis="http://schemas.xmlsoap.org/ws/2004/08/addressing"
-    xmlns:tt="http://www.onvif.org/ver10/schema" xmlns:tns1="http://www.onvif.org/ver10/topics"
-    xmlns:tds="http://www.onvif.org/ver10/device/wsdl"
-    xmlns:trt="http://www.onvif.org/ver10/media/wsdl"
-    xmlns:tev="http://www.onvif.org/ver10/events/wsdl"
-    xmlns:timg="http://www.onvif.org/ver20/imaging/wsdl"
-    xmlns:tst="http://www.onvif.org/ver10/storage/wsdl"
-    xmlns:dn="http://www.onvif.org/ver10/network/wsdl"
-    xmlns:tr2="http://www.onvif.org/ver20/media/wsdl"
-    xmlns:tptz="http://www.onvif.org/ver20/ptz/wsdl"
-    xmlns:tan="http://www.onvif.org/ver20/analytics/wsdl"
-    xmlns:axt="http://www.onvif.org/ver20/analytics"
-    xmlns:tmd="http://www.onvif.org/ver10/deviceIO/wsdl"
-    xmlns:ter="http://www.onvif.org/ver10/error">
-    <s:Header></s:Header>
+    xmlns:dn="http://www.onvif.org/ver10/network/wsdl" xmlns:tt="http://www.onvif.org/ver10/schema"
+    xmlns:tds="http://www.onvif.org/ver10/device/wsdl">
+    <s:Header>
+        <wsa:MessageID>uuid:b488789a-f260-d311-3ada-00:12:33:AD:3A:06</wsa:MessageID>
+        <wsa:RelatesTo>uuid:50efdc96-a261-4300-8bae-f0c0515ddd42</wsa:RelatesTo>
+        <wsa:To>http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</wsa:To>
+        <wsa:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/ProbeMatches</wsa:Action>
+    </s:Header>
     <s:Body>
-        <tptz:ContinuousMoveResponse />
+        <d:ProbeMatches>
+            <d:ProbeMatch>
+                <wsa:EndpointReference>
+                    <wsa:Address>urn:uuid:ffb69872-5566-7788-99aa-ec41f96c5d04</wsa:Address>
+                </wsa:EndpointReference>
+                <d:Types>dn:NetworkVideoTransmitter tds:Device</d:Types>
+                <d:Scopes>onvif://www.onvif.org/type/video_encoder
+                    onvif://www.onvif.org/type/audio_encoder
+                    onvif://www.onvif.org/hardware/IPC-model
+                    onvif://www.onvif.org/location/country/china onvif://www.onvif.org/name/NVT
+                    onvif://www.onvif.org/Profile/Streaming
+                    onvif://www.onvif.org/A1C2B3/mac/ec:41:f9:6c:5d:04
+                    onvif://www.onvif.org/Profile/T</d:Scopes>
+                <d:XAddrs>http://10.0.0.4:8899/onvif/device_service</d:XAddrs>
+                <d:MetadataVersion>1</d:MetadataVersion>
+            </d:ProbeMatch>
+        </d:ProbeMatches>
     </s:Body>
 </s:Envelope>

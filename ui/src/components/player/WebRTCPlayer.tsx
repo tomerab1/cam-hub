@@ -4,6 +4,16 @@ interface WebRTCProps {
 	whepUrl: string;
 }
 
+async function waitForIceComplete(pc: RTCPeerConnection) {
+	if (pc.iceGatheringState === "complete") return;
+	await new Promise<void>((resolve) => {
+		const h = () =>
+			pc.iceGatheringState === "complete" &&
+			(pc.removeEventListener("icegatheringstatechange", h), resolve());
+		pc.addEventListener("icegatheringstatechange", h);
+	});
+}
+
 export default function WebRTCPlayer({ whepUrl }: WebRTCProps) {
 	const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -11,13 +21,7 @@ export default function WebRTCPlayer({ whepUrl }: WebRTCProps) {
 		let peerConn: RTCPeerConnection | null = null;
 
 		const goLive = async () => {
-			peerConn = new RTCPeerConnection({
-				iceServers: [
-					{
-						urls: ["stun:stun.l.google.com:19302"],
-					},
-				],
-			});
+			peerConn = new RTCPeerConnection();
 			console.log("creating peer connection...");
 			peerConn.addTransceiver("video", { direction: "recvonly" });
 			peerConn.addTransceiver("audio", { direction: "recvonly" });
@@ -34,6 +38,7 @@ export default function WebRTCPlayer({ whepUrl }: WebRTCProps) {
 
 			const offer = await peerConn.createOffer();
 			await peerConn.setLocalDescription(offer);
+			await waitForIceComplete(peerConn);
 
 			const req = await fetch(whepUrl, {
 				method: "POST",
@@ -48,6 +53,7 @@ export default function WebRTCPlayer({ whepUrl }: WebRTCProps) {
 
 			const answer = await req.text();
 			await peerConn.setRemoteDescription({ type: "answer", sdp: answer });
+			console.log(answer);
 		};
 		goLive();
 

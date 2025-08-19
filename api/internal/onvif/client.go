@@ -1,10 +1,7 @@
 package onvif
 
 import (
-	"encoding/xml"
-	"io"
 	"log/slog"
-	"net/http"
 
 	"github.com/use-go/onvif"
 )
@@ -36,16 +33,4 @@ func NewOnvifClient(params OnvifClientParams) (*OnvifClient, error) {
 		logger: params.Logger,
 		device: dev,
 	}, nil
-}
-
-func parseResp[T any](resp *http.Response, out *T, logger *slog.Logger) {
-	defer resp.Body.Close()
-	raw, err := io.ReadAll(resp.Body)
-
-	if err != nil {
-		logger.Error(err.Error())
-		return
-	}
-
-	xml.Unmarshal(raw, out)
 }

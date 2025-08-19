@@ -10,11 +10,12 @@ services:
       - "8000:8000"
       - "8001:8001"
       - "8002:8002"
+      - "9997:9997"         # API 
     volumes:
       - ./mediamtx.yml:/mediamtx.yml:ro
     environment:
       MTX_HLS: "yes"
       MTX_WEBRTC: "yes"
       MTX_RTSPTRANSPORTS: "tcp"
-      MTX_WEBRTCADDITIONALHOSTS: "172.21.52.109"
+      MTX_WEBRTCADDITIONALHOSTS: "127.0.0.1"
     restart: unless-stopped
