@@ -14,12 +14,12 @@ import (
 var hostPortRE = regexp.MustCompile("[0-9]+.+[0-9]+:[0-9]+")
 var uuidRE = regexp.MustCompile(`urn:uuid:([0-9a-fA-F-]{36})`)
 
-func DiscoverNewCameras(logger *slog.Logger) *WsDiscoveryDto {
+func DiscoverNewCameras(logger *slog.Logger) WsDiscoveryDto {
 	ifs, _ := net.Interfaces()
 
 	var matchesLk sync.Mutex
 	var wg sync.WaitGroup
-	discovered := &WsDiscoveryDto{}
+	discovered := WsDiscoveryDto{Matches: []WsDiscoveryMatch{}}
 
 	for _, i := range ifs {
 		wg.Add(1)
@@ -63,9 +63,5 @@ func DiscoverNewCameras(logger *slog.Logger) *WsDiscoveryDto {
 	}
 
 	wg.Wait()
-	if len(discovered.Matches) > 0 {
-		return discovered
-	}
-
-	return nil
+	return discovered
 }
