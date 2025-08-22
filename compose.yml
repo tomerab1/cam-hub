@@ -1,18 +1,14 @@
 services:
   mediamtx-server:
-    image: bluenviron/mediamtx:latest
+    build: ./infra/mediamtx
     ports:
       - "8554:8554"         # RTSP (server)
-      - "8888:8888"         # HLS (HTTP)
       - "8889:8889"         # WebRTC (HTTP)
       - "8189:8189/udp"     # WebRTC ICE/UDP
       - "8890:8890/udp"
-      - "8000:8000"
-      - "8001:8001"
-      - "8002:8002"
       - "9997:9997"         # API 
     volumes:
-      - ./mediamtx.yml:/mediamtx.yml:ro
+      - ./infra/mediamtx/mediamtx.yml:/mediamtx.yml:ro
     environment:
       MTX_HLS: "yes"
       MTX_WEBRTC: "yes"
