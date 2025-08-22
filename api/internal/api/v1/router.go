@@ -1,17 +1,13 @@
 package v1
 
 import (
-	"log/slog"
 	"net/http"
-	"os"
 
 	"github.com/go-chi/chi/v5"
+	"tomerab.com/cam-hub/internal/application"
 )
 
-func LoadRoutes() *chi.Mux {
-	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelDebug,
-	}))
+func LoadRoutes(app *application.Application) *chi.Mux {
 	r := chi.NewRouter()
 
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
@@ -19,7 +15,8 @@ func LoadRoutes() *chi.Mux {
 	})
 
 	r.Route("/cameras", func(r chi.Router) {
-		r.With(loggerMiddleware(logger)).Get("/", GetDiscoveredDevices)
+		r.With(appMiddleware(app)).Get("/", getDiscoveredDevices)
+		r.With(appMiddleware(app)).Get("/profiles", getProfiles)
 	})
 
 	return r

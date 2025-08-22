@@ -3,7 +3,7 @@ package onvif
 import (
 	"log/slog"
 
-	"github.com/use-go/onvif"
+	"github.com/IOTechSystems/onvif"
 )
 
 type OnvifClientParams struct {

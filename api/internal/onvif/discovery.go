@@ -8,11 +8,20 @@ import (
 	"regexp"
 	"sync"
 
-	wsdiscovery "github.com/use-go/onvif/ws-discovery"
+	wsdiscovery "github.com/IOTechSystems/onvif/ws-discovery"
 )
 
 var hostPortRE = regexp.MustCompile("[0-9]+.+[0-9]+:[0-9]+")
 var uuidRE = regexp.MustCompile(`urn:uuid:([0-9a-fA-F-]{36})`)
+
+type wsDiscoveryResp struct {
+	Matches []struct {
+		Match struct {
+			UUID  string `xml:"EndpointReference>Address"`
+			Xaddr string `xml:"XAddrs"`
+		} `xml:"ProbeMatch"`
+	} `xml:"Body>ProbeMatches"`
+}
 
 func DiscoverNewCameras(logger *slog.Logger) WsDiscoveryDto {
 	ifs, _ := net.Interfaces()

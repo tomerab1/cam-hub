@@ -24,6 +24,7 @@ type SystemDateTimeDto struct {
 	} `json:"local"`
 }
 
+// Ws discovery
 type WsDiscoveryMatch struct {
 	UUID  string `json:"uuid"`
 	Xaddr string `json:"addr"`
