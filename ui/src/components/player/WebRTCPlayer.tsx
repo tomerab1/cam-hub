@@ -4,12 +4,25 @@ interface WebRTCProps {
 	whepUrl: string;
 }
 
+async function waitForIceComplete(pc: RTCPeerConnection) {
+	if (pc.iceGatheringState === "complete") return;
+	await new Promise<void>((resolve) => {
+		const h = () =>
+			pc.iceGatheringState === "complete" &&
+			(pc.removeEventListener("icegatheringstatechange", h), resolve());
+		pc.addEventListener("icegatheringstatechange", h);
+	});
+}
+
 export default function WebRTCPlayer({ whepUrl }: WebRTCProps) {
 	const videoRef = useRef<HTMLVideoElement>(null);
 
 	useEffect(() => {
+		let peerConn: RTCPeerConnection | null = null;
+
 		const goLive = async () => {
-			const peerConn = new RTCPeerConnection();
+			peerConn = new RTCPeerConnection();
+			console.log("creating peer connection...");
 			peerConn.addTransceiver("video", { direction: "recvonly" });
 			peerConn.addTransceiver("audio", { direction: "recvonly" });
 
@@ -25,6 +38,7 @@ export default function WebRTCPlayer({ whepUrl }: WebRTCProps) {
 
 			const offer = await peerConn.createOffer();
 			await peerConn.setLocalDescription(offer);
+			await waitForIceComplete(peerConn);
 
 			const req = await fetch(whepUrl, {
 				method: "POST",
@@ -39,8 +53,11 @@ export default function WebRTCPlayer({ whepUrl }: WebRTCProps) {
 
 			const answer = await req.text();
 			await peerConn.setRemoteDescription({ type: "answer", sdp: answer });
+			console.log(answer);
 		};
 		goLive();
+
+		return () => peerConn?.close();
 	}, [whepUrl]);
 
 	const enableAudio = async () => {
@@ -66,7 +83,7 @@ export default function WebRTCPlayer({ whepUrl }: WebRTCProps) {
 				muted
 				playsInline
 				controls
-				style={{ widows: 640, height: 640, borderRadius: "0.5%" }}
+				style={{ width: 640, height: 640, borderRadius: "0.5%" }}
 			></video>
 			<button onClick={enableAudio}>Enable sound</button>
 		</div>
