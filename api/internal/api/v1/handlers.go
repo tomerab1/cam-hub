@@ -15,13 +15,7 @@ func getDiscoveredDevices(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		serverError(w, r, err, logger)
 	}
+
+	w.Header().Set("Content-Type", "application/json")
 	w.Write(raw)
-}
-
-func getProfiles(w http.ResponseWriter, r *http.Request) {
-	client := appFromCtx(r.Context()).Client
-	profiles := client.GetProfiles()
-
-	w.Header().Add("Content-Type", "application/json")
-	w.Write(profiles)
 }
