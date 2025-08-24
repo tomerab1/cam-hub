@@ -4,14 +4,15 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5"
 	"tomerab.com/cam-hub/internal/api/v1/models"
 	v1 "tomerab.com/cam-hub/internal/contracts/v1"
 	"tomerab.com/cam-hub/internal/onvif"
+	"tomerab.com/cam-hub/internal/services"
 )
 
 type CameraService struct {
-	DB     *pgxpool.Pool
+	DB     services.DBIface
 	Logger *slog.Logger
 }
 
@@ -90,4 +91,34 @@ func (camService *CameraService) Pair(ctx context.Context, req v1.PairDeviceReq)
 		Model:           info.Model,
 		HardwareId:      info.HardwareId,
 	}, nil
+}
+
+func (camService *CameraService) AreCamerasPaired(ctx context.Context, uuids []string) ([]bool, error) {
+	batch := &pgx.Batch{}
+	for _, uuid := range uuids {
+		batch.Queue(`SELECT id
+					 FROM cameras
+					 WHERE id = $1
+		`, uuid)
+	}
+
+	batchResults := camService.DB.SendBatch(ctx, batch)
+	defer batchResults.Close()
+
+	results := make([]bool, len(uuids))
+	for i := range uuids {
+		var tmp string
+		err := batchResults.QueryRow().Scan(&tmp)
+		if err == pgx.ErrNoRows {
+			results[i] = false
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		results[i] = true
+	}
+
+	return results, nil
 }
