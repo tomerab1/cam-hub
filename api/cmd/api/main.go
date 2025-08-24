@@ -12,6 +12,7 @@ import (
 	"github.com/joho/godotenv"
 	"tomerab.com/cam-hub/internal/application"
 	"tomerab.com/cam-hub/internal/httpserver"
+	v1 "tomerab.com/cam-hub/internal/services/v1"
 )
 
 func main() {
@@ -51,6 +52,10 @@ func main() {
 		Logger:     logger,
 		DB:         dbpool,
 		HttpClient: &httpClient,
+		CameraService: &v1.CameraService{
+			DB:     dbpool,
+			Logger: logger,
+		},
 	}
 
 	srv := http.Server{
