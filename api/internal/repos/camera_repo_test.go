@@ -309,4 +309,133 @@ func TestFindOne(t *testing.T) {
 			t.Errorf("unmet expectations: %v", err)
 		}
 	})
+
+	t.Run("empty string", func(t *testing.T) {
+		mock.ExpectQuery(`SELECT.*FROM cameras.*WHERE id = \$1`).
+			WithArgs("").
+			WillReturnError(pgx.ErrNoRows)
+
+		got, err := repo.FindOne(ctx, "")
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+
+		if !strings.Contains(err.Error(), "no rows in result set") {
+			t.Errorf("expected 'no rows' error, got: %v", err)
+		}
+
+		if !reflect.DeepEqual(&models.Camera{}, got) {
+			t.Errorf("expected empty camera, got: %v", got)
+		}
+
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Errorf("unmet expectations: %v", err)
+		}
+	})
+}
+
+func TestSave(t *testing.T) {
+	repo, mock, ctx := setupCameraRepoTest(t)
+
+	t.Run("successful save", func(t *testing.T) {
+		camera := makeCamera("1", false)
+
+		mock.ExpectExec(`UPDATE cameras\s+SET.*WHERE id = \$1`).
+			WithArgs(
+				camera.UUID,
+				camera.CameraName,
+				camera.Manufacturer,
+				camera.Model,
+				camera.FirmwareVersion,
+				camera.SerialNumber,
+				camera.HardwareId,
+				camera.Addr,
+				camera.IsPaired,
+			).
+			WillReturnResult(pgxmock.NewResult("UPDATE", 1))
+
+		err := repo.Save(ctx, camera)
+		if err != nil {
+			t.Errorf("expected nil error, got: %v", err)
+		}
+
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Errorf("unmet expectations: %v", err)
+		}
+	})
+
+	t.Run("camera not found - no rows affected", func(t *testing.T) {
+		camera := makeCamera("1", false)
+
+		mock.ExpectExec(`UPDATE cameras\s+SET.*WHERE id = \$1`).
+			WithArgs(
+				camera.UUID,
+				camera.CameraName,
+				camera.Manufacturer,
+				camera.Model,
+				camera.FirmwareVersion,
+				camera.SerialNumber,
+				camera.HardwareId,
+				camera.Addr,
+				camera.IsPaired,
+			).
+			WillReturnResult(pgxmock.NewResult("UPDATE", 0))
+
+		err := repo.Save(ctx, camera)
+		if err == nil {
+			t.Fatal("expected error when no rows affected, got nil")
+		}
+
+		expectedErrMsg := "save failed: no rows were affected"
+		if !strings.Contains(err.Error(), expectedErrMsg) {
+			t.Errorf("expected error containing '%s', got: %v", expectedErrMsg, err)
+		}
+
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Errorf("unmet expectations: %v", err)
+		}
+	})
+
+	t.Run("nil camera", func(t *testing.T) {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Error("expected panic when camera is nil, got no panic")
+			}
+		}()
+
+		err := repo.Save(ctx, nil)
+		t.Errorf("should have panicked before returning error, got: %v", err)
+	})
+
+	t.Run("multiple rows affected - unexpected", func(t *testing.T) {
+		camera := makeCamera("1", false)
+
+		mock.ExpectExec(`UPDATE cameras\s+SET.*WHERE id = \$1`).
+			WithArgs(
+				camera.UUID,
+				camera.CameraName,
+				camera.Manufacturer,
+				camera.Model,
+				camera.FirmwareVersion,
+				camera.SerialNumber,
+				camera.HardwareId,
+				camera.Addr,
+				camera.IsPaired,
+			).
+			WillReturnResult(pgxmock.NewResult("UPDATE", 2))
+
+		err := repo.Save(ctx, camera)
+		if err == nil {
+			t.Fatal("expected error when multiple rows affected, got nil")
+		}
+
+		expectedErrMsg := "save failed: no rows were affected"
+		if !strings.Contains(err.Error(), expectedErrMsg) {
+			t.Errorf("expected error containing '%s', got: %v", expectedErrMsg, err)
+		}
+
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Errorf("unmet expectations: %v", err)
+		}
+	})
 }
