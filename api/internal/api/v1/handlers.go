@@ -14,16 +14,15 @@ import (
 
 func filterUUIDS(ctx context.Context, camRepo *repos.PgxCameraRepo, outDiscovered *discovery.WsDiscoveryDto) error {
 	var uuids []string
-	var lastErr error = nil
 
 	for _, match := range outDiscovered.Matches {
 		uuids = append(uuids, match.UUID)
 	}
 
-	filters, err := camRepo.ExistsMany(ctx, uuids)
+	filters, err := camRepo.FindExistingPaired(ctx, uuids)
 
 	if err != nil {
-		lastErr = err
+		return err
 	}
 
 	for i := range filters {
@@ -34,7 +33,7 @@ func filterUUIDS(ctx context.Context, camRepo *repos.PgxCameraRepo, outDiscovere
 		}
 	}
 
-	return lastErr
+	return err
 }
 
 func getDiscoveredDevices(w http.ResponseWriter, r *http.Request) {

@@ -56,7 +56,7 @@ func (repo *PgxCameraRepo) UpsertCamera(ctx context.Context, tx pgx.Tx, cam *mod
 	return err
 }
 
-func (repo *PgxCameraRepo) ExistsMany(ctx context.Context, uuids []string) ([]bool, error) {
+func (repo *PgxCameraRepo) FindExistingPaired(ctx context.Context, uuids []string) ([]bool, error) {
 	batch := &pgx.Batch{}
 	for _, uuid := range uuids {
 		// Get only rows that exists in the db and are paired
@@ -98,7 +98,7 @@ func (repo *PgxCameraRepo) FindOne(ctx context.Context, uuid string) (*models.Ca
 													serialnumber,
 													hardwareid,
 													addr,
-													isPaired AS isPaired
+													ispaired
 												FROM cameras
 												WHERE id = $1`, uuid)
 
