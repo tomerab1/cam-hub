@@ -4,10 +4,10 @@ go 1.23.3
 
 require (
 	github.com/IOTechSystems/onvif v1.2.0
+	github.com/georgysavva/scany/v2 v2.1.4
 	github.com/go-chi/chi/v5 v5.2.2
 	github.com/jackc/pgx/v5 v5.7.5
 	github.com/joho/godotenv v1.5.1
-	github.com/pashagolub/pgxmock/v4 v4.8.0
 )
 
 require (

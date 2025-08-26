@@ -7,3 +7,7 @@ type PairDeviceReq struct {
 	Username   string `json:"username"`
 	Password   string `json:"password"`
 }
+
+type UnpairDeviceReq struct {
+	UUID string `json:"uuid"`
+}

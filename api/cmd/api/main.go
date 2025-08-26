@@ -12,7 +12,8 @@ import (
 	"github.com/joho/godotenv"
 	"tomerab.com/cam-hub/internal/application"
 	"tomerab.com/cam-hub/internal/httpserver"
-	v1 "tomerab.com/cam-hub/internal/services/v1"
+	"tomerab.com/cam-hub/internal/repos"
+	"tomerab.com/cam-hub/internal/services"
 )
 
 func main() {
@@ -20,7 +21,7 @@ func main() {
 		Level: slog.LevelDebug,
 	}))
 
-	err := godotenv.Load()
+	err := godotenv.Load("/home/tomerab/VSCProjects/cam-hub/api/.env")
 	if err != nil {
 		logger.Error(err.Error())
 		os.Exit(1)
@@ -52,9 +53,10 @@ func main() {
 		Logger:     logger,
 		DB:         dbpool,
 		HttpClient: &httpClient,
-		CameraService: &v1.CameraService{
-			DB:     dbpool,
-			Logger: logger,
+		CameraService: &services.CameraService{
+			CamRepo:      repos.NewPgxCameraRepo(dbpool),
+			CamCredsRepo: repos.NewPgxCameraCredsRepo(dbpool),
+			Logger:       logger,
 		},
 	}
 

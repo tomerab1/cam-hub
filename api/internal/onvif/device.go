@@ -2,6 +2,7 @@ package onvif
 
 import (
 	"github.com/IOTechSystems/onvif/device"
+	"github.com/IOTechSystems/onvif/xsd"
 	"github.com/IOTechSystems/onvif/xsd/onvif"
 	dev "tomerab.com/cam-hub/internal/onvif/device"
 )
@@ -42,7 +43,7 @@ func (client *OnvifClient) GetDeviceInfo() (dev.GetDeviceInfoDto, error) {
 }
 
 func (client *OnvifClient) CreateUser(createUserDto dev.CreateUserDto) error {
-	lvl := onvif.UserLevel(createUserDto.UserLevel)
+	lvl := onvif.UserLevel("User")
 	resp, err := client.device.CallMethod(device.CreateUsers{
 		User: []onvif.UserRequest{
 			{
@@ -59,6 +60,47 @@ func (client *OnvifClient) CreateUser(createUserDto dev.CreateUserDto) error {
 
 	var createUsersResp device.CreateUsersResponse
 	if err := parseResp(resp, &createUsersResp); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (client *OnvifClient) DeleteUser(deleteUserDto dev.DeleteUserDto) error {
+	resp, err := client.device.CallMethod(device.DeleteUsers{
+		Username: []xsd.String{xsd.String(deleteUserDto.Username)},
+	})
+
+	if err != nil {
+		return err
+	}
+
+	var createUsersResp device.DeleteUsersResponse
+	if err := parseResp(resp, &createUsersResp); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (client *OnvifClient) DemoteClient(demoteUserDto dev.DemoteUserDto) error {
+	lvl := onvif.UserLevel("User")
+	resp, err := client.device.CallMethod(device.SetUser{
+		User: []onvif.UserRequest{
+			{
+				Username:  demoteUserDto.Username,
+				Password:  demoteUserDto.Password,
+				UserLevel: &lvl,
+			},
+		},
+	})
+
+	if err != nil {
+		return err
+	}
+
+	var demoteUserResp device.SetUserResponse
+	if err := parseResp(resp, &demoteUserResp); err != nil {
 		return err
 	}
 
