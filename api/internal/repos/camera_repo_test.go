@@ -20,7 +20,7 @@ func makeCamera(uuid string, isPaired bool) *models.Camera {
 		Model:           "Test Model",
 		SerialNumber:    "SN123",
 		HardwareId:      "HW456",
-		Addr:            "192.168.1.100",
+		Addr:            "1",
 		IsPaired:        isPaired,
 		FirmwareVersion: "1.0.0",
 	}
@@ -130,11 +130,12 @@ func TestUpsertCamera(t *testing.T) {
 	})
 }
 
+// TODO(tomer): Add tests to test the new behaviour (updated filtering routine)
 func TestFindExistingPaired(t *testing.T) {
 	repo, mock, ctx := setupCameraRepoTest(t)
 
 	t.Run("empty should return empty", func(t *testing.T) {
-		filtered, err := repo.FindExistingPaired(ctx, []string{})
+		filtered, err := repo.FindExistingPaired(ctx, []string{}, []string{})
 		if err != nil {
 			t.Errorf("expected nil, got err: %v", err)
 		}
@@ -145,12 +146,13 @@ func TestFindExistingPaired(t *testing.T) {
 
 	t.Run("query returns row - should return true", func(t *testing.T) {
 		uuids := []string{"1"}
+		addrs := []string{"1"}
 		b := mock.ExpectBatch()
-		b.ExpectQuery(`SELECT id\s+FROM cameras\s+WHERE id = \$1 and ispaired = true`).
-			WithArgs("1").
+		b.ExpectQuery(`SELECT id\s+FROM cameras\s+WHERE id = \$1 and addr = \$2 and ispaired = true`).
+			WithArgs("1", "1").
 			WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow("1"))
 
-		got, err := repo.FindExistingPaired(ctx, uuids)
+		got, err := repo.FindExistingPaired(ctx, uuids, addrs)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -167,12 +169,13 @@ func TestFindExistingPaired(t *testing.T) {
 
 	t.Run("query returns no rows - should return false", func(t *testing.T) {
 		uuids := []string{"1"}
+		addrs := []string{"1"}
 		b := mock.ExpectBatch()
-		b.ExpectQuery(`SELECT id\s+FROM cameras\s+WHERE id = \$1 and ispaired = true`).
-			WithArgs("1").
+		b.ExpectQuery(`SELECT id\s+FROM cameras\s+WHERE id = \$1 and addr = \$2 and ispaired = true`).
+			WithArgs("1", "1").
 			WillReturnError(pgx.ErrNoRows)
 
-		got, err := repo.FindExistingPaired(ctx, uuids)
+		got, err := repo.FindExistingPaired(ctx, uuids, addrs)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -189,21 +192,23 @@ func TestFindExistingPaired(t *testing.T) {
 
 	t.Run("mixed results - some true others false", func(t *testing.T) {
 		uuids := []string{"exists", "missing", "exists-too"}
+		addrs := []string{"1", "1", "1"}
 
+		q := `SELECT id\s+FROM cameras\s+WHERE id = \$1 and addr = \$2 and ispaired = true`
 		b := mock.ExpectBatch()
-		b.ExpectQuery(`SELECT id\s+FROM cameras\s+WHERE id = \$1 and ispaired = true`).
-			WithArgs("exists").
+		b.ExpectQuery(q).
+			WithArgs("exists", "1").
 			WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow("exists"))
 
-		b.ExpectQuery(`SELECT id\s+FROM cameras\s+WHERE id = \$1 and ispaired = true`).
-			WithArgs("missing").
+		b.ExpectQuery(q).
+			WithArgs("missing", "1").
 			WillReturnError(pgx.ErrNoRows)
 
-		b.ExpectQuery(`SELECT id\s+FROM cameras\s+WHERE id = \$1 and ispaired = true`).
-			WithArgs("exists-too").
+		b.ExpectQuery(q).
+			WithArgs("exists-too", "1").
 			WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow("exists-too"))
 
-		results, err := repo.FindExistingPaired(ctx, uuids)
+		results, err := repo.FindExistingPaired(ctx, uuids, addrs)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -220,13 +225,14 @@ func TestFindExistingPaired(t *testing.T) {
 
 	t.Run("database error should be returned", func(t *testing.T) {
 		uuids := []string{"camera-1"}
+		addrs := []string{"1"}
 
 		b := mock.ExpectBatch()
-		b.ExpectQuery(`SELECT id\s+FROM cameras\s+WHERE id = \$1 and ispaired = true`).
-			WithArgs("camera-1").
+		b.ExpectQuery(`SELECT id\s+FROM cameras\s+WHERE id = \$1 and addr = \$2 and ispaired = true`).
+			WithArgs("camera-1", "1").
 			WillReturnError(errors.New("database connection failed"))
 
-		_, err := repo.FindExistingPaired(ctx, uuids)
+		_, err := repo.FindExistingPaired(ctx, uuids, addrs)
 		if err == nil {
 			t.Error("expected error, got nil")
 		}
@@ -237,7 +243,7 @@ func TestFindExistingPaired(t *testing.T) {
 	})
 
 	t.Run("nil input should handle gracefully", func(t *testing.T) {
-		results, err := repo.FindExistingPaired(ctx, nil)
+		results, err := repo.FindExistingPaired(ctx, nil, nil)
 		if err != nil {
 			t.Errorf("expected nil error for nil input, got: %v", err)
 		}

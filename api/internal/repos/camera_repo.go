@@ -7,12 +7,13 @@ import (
 	"github.com/georgysavva/scany/v2/pgxscan"
 	"github.com/jackc/pgx/v5"
 	"tomerab.com/cam-hub/internal/api/v1/models"
+	"tomerab.com/cam-hub/internal/utils"
 )
 
 type CameraRepoIface interface {
 	Begin(ctx context.Context) (pgx.Tx, error)
 	UpsertCamera(ctx context.Context, tx pgx.Tx, cam *models.Camera) error
-	FindExistingPaired(ctx context.Context, uuids []string) ([]bool, error)
+	FindExistingPaired(ctx context.Context, uuids []string, addrs []string) ([]bool, error)
 	FindOne(ctx context.Context, uuid string) (*models.Camera, error)
 	Save(ctx context.Context, cam *models.Camera) error
 	Delete(ctx context.Context, uuid string) error
@@ -65,14 +66,16 @@ func (repo *PgxCameraRepo) UpsertCamera(ctx context.Context, tx pgx.Tx, cam *mod
 	return err
 }
 
-func (repo *PgxCameraRepo) FindExistingPaired(ctx context.Context, uuids []string) ([]bool, error) {
+func (repo *PgxCameraRepo) FindExistingPaired(ctx context.Context, uuids []string, addrs []string) ([]bool, error) {
 	batch := &pgx.Batch{}
-	for _, uuid := range uuids {
+	zipped := utils.Zip(uuids, addrs)
+
+	for _, pair := range zipped {
 		// Get only rows that exists in the db and are paired
 		batch.Queue(`SELECT id
 					 FROM cameras
-					 WHERE id = $1 and ispaired = true
-		`, uuid)
+					 WHERE id = $1 and addr = $2 and ispaired = true
+		`, pair.First, pair.Second)
 	}
 
 	batchResults := repo.DB.SendBatch(ctx, batch)

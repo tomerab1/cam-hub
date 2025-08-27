@@ -1,0 +1,43 @@
+package utils
+
+type Pair[T, U any] struct {
+	First  T
+	Second U
+}
+
+func Zip[T, U any](s1 []T, s2 []U) []Pair[T, U] {
+	minLength := len(s1)
+	if len(s2) < minLength {
+		minLength = len(s2)
+	}
+
+	zipped := make([]Pair[T, U], minLength)
+	for i := 0; i < minLength; i++ {
+		zipped[i] = Pair[T, U]{First: s1[i], Second: s2[i]}
+	}
+
+	return zipped
+}
+
+func CountElems[T any](elems []T, pred func(elem T) bool) int {
+	count := 0
+	for _, elem := range elems {
+		if pred(elem) {
+			count += 1
+		}
+	}
+
+	return count
+}
+
+func FilterElems[T any](elems []T, allocSz int, pred func(idx int, elem T) bool) []T {
+	filtered := make([]T, allocSz)
+
+	for i, elem := range elems {
+		if pred(i, elem) {
+			filtered[i] = elem
+		}
+	}
+
+	return filtered
+}
