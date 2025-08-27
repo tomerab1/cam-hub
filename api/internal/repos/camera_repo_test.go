@@ -247,7 +247,7 @@ func TestFindExistingPaired(t *testing.T) {
 	})
 }
 
-func TestFindOne(t *testing.T) {
+func TestCamerasFindOne(t *testing.T) {
 	repo, mock, ctx := setupCameraRepoTest(t)
 
 	t.Run("camera exists", func(t *testing.T) {

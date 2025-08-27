@@ -20,11 +20,7 @@ func NewPgxCameraCredsRepo(db DBPoolIface) *PgxCameraCredsRepo {
 }
 
 func (repo *PgxCameraCredsRepo) InsertCreds(ctx context.Context, tx pgx.Tx, creds *models.CameraCreds) error {
-	if creds == nil {
-		return fmt.Errorf("invalid argument: creds are null")
-	}
-
-	_, err := tx.Exec(ctx, `
+	tag, err := tx.Exec(ctx, `
 		INSERT INTO camera_creds (id, username, password)
 		VALUES ($1,$2,$3)
 		ON CONFLICT (id) DO UPDATE SET
@@ -34,12 +30,16 @@ func (repo *PgxCameraCredsRepo) InsertCreds(ctx context.Context, tx pgx.Tx, cred
 		creds.UUID, creds.Username, creds.Password,
 	)
 
+	if !(tag.Insert() || tag.Update()) {
+		return fmt.Errorf("failed to insert/update creds: uuid=%s, err=%v", creds.UUID, err)
+	}
+
 	return err
 }
 
 func (repo *PgxCameraCredsRepo) FindOne(ctx context.Context, uuid string) (*models.CameraCreds, error) {
 	var creds models.CameraCreds
-	err := pgxscan.Get(ctx, repo.DB, &creds, `SELECT username, password
+	err := pgxscan.Get(ctx, repo.DB, &creds, `SELECT id, username, password
 												FROM camera_creds
 												WHERE id = $1
 	`, uuid)
