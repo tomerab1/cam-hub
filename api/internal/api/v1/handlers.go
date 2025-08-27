@@ -3,37 +3,43 @@ package v1
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
+	"tomerab.com/cam-hub/internal/api"
 	v1 "tomerab.com/cam-hub/internal/contracts/v1"
 	"tomerab.com/cam-hub/internal/onvif"
 	"tomerab.com/cam-hub/internal/onvif/discovery"
 	"tomerab.com/cam-hub/internal/repos"
 )
 
-func filterUUIDS(ctx context.Context, camRepo *repos.PgxCameraRepo, outDiscovered *discovery.WsDiscoveryDto) error {
+func filterUUIDS(ctx context.Context, camRepo repos.CameraRepoIface, matches []discovery.WsDiscoveryMatch) ([]discovery.WsDiscoveryMatch, error) {
 	var uuids []string
 
-	for _, match := range outDiscovered.Matches {
+	for _, match := range matches {
 		uuids = append(uuids, match.UUID)
 	}
 
 	filters, err := camRepo.FindExistingPaired(ctx, uuids)
 
+	fmt.Println(filters, uuids)
+
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	for i := range filters {
-		if filters[i] {
-			// The WsDiscoveryMatch has 'omitempty' specified so we empty the values to filter them in json ser.
-			outDiscovered.Matches[i].UUID = ""
-			outDiscovered.Matches[i].Xaddr = ""
-		}
+	predCount := func(elem bool) bool {
+		return !elem
 	}
 
-	return err
+	predFilter := func(idx int, elem discovery.WsDiscoveryMatch) bool {
+		return !filters[idx]
+	}
+
+	filtered := api.FilterElems(matches, api.CountElems(filters, predCount), predFilter)
+
+	return filtered, err
 }
 
 func getDiscoveredDevices(w http.ResponseWriter, r *http.Request) {
@@ -43,13 +49,13 @@ func getDiscoveredDevices(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
-	err := filterUUIDS(ctx, app.CameraService.CamRepo, &discovered)
+	filteredMatches, err := filterUUIDS(ctx, app.CameraService.CamRepo, discovered.Matches)
 	if err != nil {
 		serverError(w, r, err, app.Logger)
 		return
 	}
 
-	raw, err := json.Marshal(discovered)
+	raw, err := json.Marshal(discovery.WsDiscoveryDto{Matches: filteredMatches})
 	if err != nil {
 		serverError(w, r, err, app.Logger)
 		return

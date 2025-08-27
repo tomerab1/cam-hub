@@ -9,6 +9,11 @@ import (
 	"tomerab.com/cam-hub/internal/api/v1/models"
 )
 
+type CameraCredsRepoIface interface {
+	InsertCreds(ctx context.Context, tx pgx.Tx, creds *models.CameraCreds) error
+	FindOne(ctx context.Context, uuid string) (*models.CameraCreds, error)
+}
+
 type PgxCameraCredsRepo struct {
 	DB DBPoolIface
 }

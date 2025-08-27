@@ -9,6 +9,15 @@ import (
 	"tomerab.com/cam-hub/internal/api/v1/models"
 )
 
+type CameraRepoIface interface {
+	Begin(ctx context.Context) (pgx.Tx, error)
+	UpsertCamera(ctx context.Context, tx pgx.Tx, cam *models.Camera) error
+	FindExistingPaired(ctx context.Context, uuids []string) ([]bool, error)
+	FindOne(ctx context.Context, uuid string) (*models.Camera, error)
+	Save(ctx context.Context, cam *models.Camera) error
+	Delete(ctx context.Context, uuid string) error
+}
+
 type PgxCameraRepo struct {
 	DB DBPoolIface
 }

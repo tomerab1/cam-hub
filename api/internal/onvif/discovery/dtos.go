@@ -1,8 +1,8 @@
 package discovery
 
 type WsDiscoveryMatch struct {
-	UUID  string `json:"uuid,omitempty"`
-	Xaddr string `json:"addr,omitempty"`
+	UUID  string `json:"uuid"`
+	Xaddr string `json:"addr"`
 }
 
 type WsDiscoveryDto struct {
