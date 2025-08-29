@@ -1,14 +1,19 @@
 import {
+	Box,
+	Paper,
 	Table,
 	TableBody,
 	TableCell,
 	TableContainer,
 	TableHead,
 	TableRow,
-	Paper,
 	IconButton,
+	Tooltip,
+	CircularProgress,
+	Typography,
 } from "@mui/material";
 import RefreshIcon from "@mui/icons-material/Refresh";
+import RadarRounded from "@mui/icons-material/RadarRounded";
 import type { DiscoveryDto } from "../contracts/DiscoveryDto";
 import { useState } from "react";
 import CameraPairingDialog from "./CameraPairingDialog";
@@ -24,103 +29,129 @@ export default function CameraDiscoveryTable({
 	isLoading,
 	matches,
 }: CameraDiscoveryTableProps) {
-	const [open, setOpen] = useState<boolean>(false);
-	const [uuid, setUUID] = useState<string>("");
-	const [addr, setAddr] = useState<string>("");
+	const [open, setOpen] = useState(false);
+	const [uuid, setUUID] = useState("");
+	const [addr, setAddr] = useState("");
 
-	const handleClickOpen = (uuid: string, addr: string) => {
+	const handleClickOpen = (u: string, a: string) => {
 		setOpen(true);
-		setUUID(uuid);
-		setAddr(addr);
+		setUUID(u);
+		setAddr(a);
 	};
-
-	const handleClose = () => {
-		setOpen(false);
-	};
+	const handleClose = () => setOpen(false);
 
 	return (
 		<TableContainer
 			component={Paper}
-			sx={{ width: "80%", maxWidth: 800, boxShadow: 3, borderRadius: 2 }}
+			elevation={6}
+			sx={{
+				width: "100%",
+				mx: 0,
+				borderRadius: 3,
+				overflow: "hidden",
+				backdropFilter: "blur(4px)",
+			}}
 		>
-			<Table>
-				<TableHead component={Paper}>
+			<Table size="small" aria-label="discovered cameras">
+				<TableHead>
 					<TableRow>
 						<TableCell
 							sx={{
-								fontWeight: "bold",
-								borderBottom: "none",
-								color: "oklch(92.3% 0.003 48.717)",
+								fontWeight: 700,
+								color: "text.secondary",
+								borderBottom: (t) => `1px solid ${t.palette.divider}`,
 							}}
 						>
 							UUID
 						</TableCell>
 						<TableCell
 							sx={{
-								fontWeight: "bold",
-								borderBottom: "none",
-								color: "oklch(92.3% 0.003 48.717)",
+								fontWeight: 700,
+								color: "text.secondary",
+								borderBottom: (t) => `1px solid ${t.palette.divider}`,
 							}}
 						>
 							Address
 						</TableCell>
-						<TableCell align="right" sx={{ borderBottom: "none" }}>
-							<IconButton
-								onClick={discoverCameras}
-								disabled={isLoading}
-								color="primary"
-							>
-								<RefreshIcon
-									sx={{
-										animation: isLoading ? "spin 1s linear infinite" : "none",
-										"@keyframes spin": {
-											from: { transform: "rotate(0deg)" },
-											to: { transform: "rotate(360deg)" },
-										},
-										color: "oklch(92.3% 0.003 48.717)",
-									}}
-								/>
-							</IconButton>
+						<TableCell
+							align="right"
+							sx={{
+								width: 1,
+								borderBottom: (t) => `1px solid ${t.palette.divider}`,
+							}}
+						>
+							<Tooltip title="Scan for cameras">
+								<span>
+									<IconButton
+										onClick={discoverCameras}
+										disabled={isLoading}
+										size="small"
+									>
+										{isLoading ? (
+											<CircularProgress size={18} />
+										) : (
+											<RefreshIcon sx={{ fontSize: 20 }} />
+										)}
+									</IconButton>
+								</span>
+							</Tooltip>
 						</TableCell>
 					</TableRow>
 				</TableHead>
+
 				<TableBody>
-					{matches?.matches.map((match, idx) => (
+					{matches?.matches.map((m, idx) => (
 						<TableRow
 							key={idx}
 							hover
-							component={Paper}
 							sx={{
-								"&:hover": {
-									cursor: "pointer",
-								},
+								cursor: "pointer",
+								"&:hover": { backgroundColor: (t) => t.palette.action.hover },
 							}}
-							onClick={() => {
-								handleClickOpen(match.uuid, match.addr);
-							}}
+							onClick={() => handleClickOpen(m.uuid, m.addr)}
 						>
-							<TableCell>{match.uuid}</TableCell>
-							<TableCell>{match.addr}</TableCell>
+							<TableCell
+								sx={{
+									fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+								}}
+							>
+								{m.uuid}
+							</TableCell>
+							<TableCell>{m.addr}</TableCell>
 							<TableCell />
 						</TableRow>
 					))}
+
 					{!matches?.matches?.length && (
 						<TableRow>
-							<TableCell colSpan={3} align="center" sx={{ py: 3 }}>
-								No cameras found. Click the refresh icon to scan.
+							<TableCell colSpan={3} align="center" sx={{ py: 5 }}>
+								<Box
+									sx={{
+										display: "flex",
+										alignItems: "center",
+										gap: 1,
+										justifyContent: "center",
+									}}
+								>
+									<RadarRounded sx={{ opacity: 0.7 }} />
+									<Typography variant="body2" color="text.secondary">
+										No cameras found. Click the refresh icon to scan.
+									</Typography>
+								</Box>
 							</TableCell>
 						</TableRow>
 					)}
-					{open && (
-						<CameraPairingDialog
-							addr={addr}
-							uuid={uuid}
-							open={open}
-							handleClose={handleClose}
-						/>
-					)}
 				</TableBody>
 			</Table>
+
+			{open && (
+				<CameraPairingDialog
+					addr={addr}
+					uuid={uuid}
+					open={open}
+					handleClose={handleClose}
+				/>
+			)}
 		</TableContainer>
 	);
 }

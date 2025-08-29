@@ -1,4 +1,4 @@
-import { Box, Button, Typography } from "@mui/material";
+import { Box, Container, IconButton, Typography } from "@mui/material";
 import { useEffect, useState } from "react";
 import type { DiscoveryDto } from "../contracts/DiscoveryDto";
 import CameraDiscoveryTable from "../components/CameraDiscoveryTable";
@@ -28,55 +28,33 @@ export default function CameraDiscoveryPage() {
 		discoverCameras();
 	}, []);
 
-	const onGoBack = () => {
-		navigate("/");
-	};
-
 	return (
-		<Box
-			sx={{
-				display: "flex",
-				flexDirection: "column",
-				minHeight: "100vh",
-				bgcolor: "background.default",
-				alignItems: "center",
-				p: 4,
-				gap: 3,
-			}}
-		>
-			<Box
-				sx={{
-					maxWidth: "80vw",
-					width: "100%",
-				}}
-			>
-				<Box sx={{ display: "flex", alignItems: "center", mb: "1.5rem" }}>
-					<Button
-						aria-label="Go back to home"
-						title="Go back to home"
-						onClick={onGoBack}
-						variant="text"
-						sx={{ color: "oklch(25% 0.001 106.424)" }}
+		<Box sx={{ minHeight: "100vh", bgcolor: "background.default", py: 4 }}>
+			<Container maxWidth="md">
+				<Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
+					<IconButton
+						aria-label="Go back"
+						onClick={() => navigate("/")}
+						size="large"
+						sx={{ color: "text.secondary", mr: 1 }}
 					>
 						<NavigateBeforeOutlined />
-					</Button>
+					</IconButton>
 					<Typography
 						variant="h4"
-						fontWeight="bold"
-						sx={{ color: "oklch(97% 0.001 106.424)", marginLeft: "1rem" }}
+						fontWeight={800}
+						sx={{ color: "text.primary" }}
 					>
 						Camera Discovery
 					</Typography>
 				</Box>
 
-				<Box sx={{ display: "flex", justifyContent: "center" }}>
-					<CameraDiscoveryTable
-						discoverCameras={discoverCameras}
-						isLoading={isLoading}
-						matches={matches}
-					/>
-				</Box>
-			</Box>
+				<CameraDiscoveryTable
+					discoverCameras={discoverCameras}
+					isLoading={isLoading}
+					matches={matches}
+				/>
+			</Container>
 		</Box>
 	);
 }
