@@ -1,13 +1,17 @@
-import { Box, Typography } from "@mui/material";
+import { Box, Button, Typography } from "@mui/material";
 import { StatCard } from "../components/StatusCard";
 import {
 	CameraAltRounded,
 	SensorsRounded,
 	WarningAmberRounded,
 } from "@mui/icons-material";
+import WifiFindIcon from "@mui/icons-material/WifiFind";
 import { CameraCard } from "../components/CameraCard";
+import { useNavigate } from "react-router-dom";
 
 export default function HomePage() {
+	const navigate = useNavigate();
+
 	return (
 		<Box
 			sx={{
@@ -34,13 +38,30 @@ export default function HomePage() {
 						mb: "1.5rem",
 					}}
 				>
-					<Typography
-						variant="h4"
-						fontWeight="bold"
-						sx={{ color: "oklch(97% 0.001 106.424)" }}
+					<Box
+						sx={{
+							width: "100%",
+							display: "flex",
+							alignItems: "center",
+							justifyContent: "space-between",
+						}}
 					>
-						Security Dashboard
-					</Typography>
+						<Typography
+							variant="h4"
+							fontWeight="bold"
+							sx={{ color: "oklch(97% 0.001 106.424)" }}
+						>
+							Security Dashboard
+						</Typography>
+						<Button
+							sx={{
+								color: "oklch(97% 0.001 106.424)",
+								"& .MuiButton-startIcon > *:nth-of-type(1)": { fontSize: 25 },
+							}}
+							startIcon={<WifiFindIcon />}
+							onClick={() => navigate("/discovery")}
+						></Button>
+					</Box>
 					<Typography sx={{ color: "oklch(70.9% 0.01 56.259)" }}>
 						Monitor and manage your home security cameras
 					</Typography>
@@ -115,12 +136,12 @@ export default function HomePage() {
 					<CameraCard
 						imgUri="src/assets/backyard_camera.jpg"
 						location="Backyard camera"
-						status="offline"
+						status="online"
 					/>
 					<CameraCard
-						imgUri="src/assets/backyard_camera.jpg"
+						imgUri="src/assets/frontdoor_camera.jpg"
 						location="Backyard camera"
-						status="offline"
+						status="online"
 					/>
 					<CameraCard
 						imgUri="src/assets/backyard_camera.jpg"

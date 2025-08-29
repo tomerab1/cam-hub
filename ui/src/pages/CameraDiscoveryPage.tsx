@@ -56,7 +56,7 @@ export default function CameraDiscoveryPage() {
 						title="Go back to home"
 						onClick={onGoBack}
 						variant="text"
-						sx={{ color: "black" }}
+						sx={{ color: "oklch(25% 0.001 106.424)" }}
 					>
 						<NavigateBeforeOutlined />
 					</Button>
