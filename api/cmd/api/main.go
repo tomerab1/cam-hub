@@ -2,10 +2,13 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -65,11 +68,34 @@ func main() {
 		Handler: httpserver.NewRouter(app),
 	}
 
+	shutdownErrChan := make(chan error)
+	go func() {
+		quit := make(chan os.Signal, 1)
+		signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+		s := <-quit
+		logger.Info("Caught a signal", "signal", s.String())
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		shutdownErrChan <- srv.Shutdown(ctx)
+	}()
+
 	logger.Info(fmt.Sprintf("Server is listening on %s", srv.Addr))
-	if err := srv.ListenAndServe(); err != nil {
-		logger.Error(err.Error())
+	err = srv.ListenAndServe()
+
+	if !errors.Is(err, http.ErrServerClosed) {
+		logger.Error("Error happend while returning for 'ListenAndServer()'", "err", err.Error())
 		os.Exit(1)
 	}
 
+	err = <-shutdownErrChan
+	if err != nil {
+		logger.Error("Error happend while returning from 'Shutdown()'", "err", err.Error())
+		os.Exit(1)
+	}
+
+	logger.Info("Shutting down the server...")
 	os.Exit(0)
 }
