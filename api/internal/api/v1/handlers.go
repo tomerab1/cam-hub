@@ -6,23 +6,22 @@ import (
 	"net/http"
 	"time"
 
+	"tomerab.com/cam-hub/internal/api"
 	v1 "tomerab.com/cam-hub/internal/contracts/v1"
 	"tomerab.com/cam-hub/internal/onvif"
 	"tomerab.com/cam-hub/internal/onvif/discovery"
 	"tomerab.com/cam-hub/internal/repos"
-	"tomerab.com/cam-hub/internal/utils"
 )
 
 func filterUUIDS(ctx context.Context, camRepo repos.CameraRepoIface, matches []discovery.WsDiscoveryMatch) ([]discovery.WsDiscoveryMatch, error) {
 	var uuids []string
-	var addrs []string
 
 	for _, match := range matches {
 		uuids = append(uuids, match.UUID)
-		addrs = append(addrs, match.Xaddr)
 	}
 
-	filters, err := camRepo.FindExistingPaired(ctx, uuids, addrs)
+	filters, err := camRepo.FindExistingPaired(ctx, uuids)
+
 	if err != nil {
 		return nil, err
 	}
@@ -35,7 +34,7 @@ func filterUUIDS(ctx context.Context, camRepo repos.CameraRepoIface, matches []d
 		return !filters[idx]
 	}
 
-	filtered := utils.FilterElems(matches, utils.CountElems(filters, predCount), predFilter)
+	filtered := api.FilterElems(matches, api.CountElems(filters, predCount), predFilter)
 
 	return filtered, err
 }
