@@ -1,0 +1,6 @@
+CREATE TABLE IF NOT EXISTS camera_creds (
+    id uuid PRIMARY KEY REFERENCES cameras(id) ON DELETE CASCADE,
+    username TEXT NOT NULL,
+    password TEXT NOT NULL,
+    created_at TIMESTAMP(0) WITH TIME ZONE NOT NULL DEFAULT NOW()
+)

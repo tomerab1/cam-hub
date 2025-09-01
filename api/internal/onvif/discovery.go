@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	wsdiscovery "github.com/IOTechSystems/onvif/ws-discovery"
+	"tomerab.com/cam-hub/internal/onvif/discovery"
 )
 
 var hostPortRE = regexp.MustCompile("[0-9]+.+[0-9]+:[0-9]+")
@@ -23,12 +24,12 @@ type wsDiscoveryResp struct {
 	} `xml:"Body>ProbeMatches"`
 }
 
-func DiscoverNewCameras(logger *slog.Logger) WsDiscoveryDto {
+func DiscoverNewCameras(logger *slog.Logger) discovery.WsDiscoveryDto {
 	ifs, _ := net.Interfaces()
 
 	var matchesLk sync.Mutex
 	var wg sync.WaitGroup
-	discovered := WsDiscoveryDto{Matches: []WsDiscoveryMatch{}}
+	discovered := discovery.WsDiscoveryDto{Matches: []discovery.WsDiscoveryMatch{}}
 
 	for _, i := range ifs {
 		wg.Add(1)
@@ -42,7 +43,7 @@ func DiscoverNewCameras(logger *slog.Logger) WsDiscoveryDto {
 			)
 
 			if err != nil {
-				logger.Error(err.Error(), "iface", name)
+				logger.Debug(err.Error(), "iface", name)
 			}
 
 			for _, resp := range responses {
@@ -62,7 +63,7 @@ func DiscoverNewCameras(logger *slog.Logger) WsDiscoveryDto {
 						continue
 					}
 
-					discovered.Matches = append(discovered.Matches, WsDiscoveryMatch{
+					discovered.Matches = append(discovered.Matches, discovery.WsDiscoveryMatch{
 						UUID:  uuidRE.FindStringSubmatch(m.Match.UUID)[1],
 						Xaddr: hostPortRE.FindString(m.Match.Xaddr),
 					})

@@ -1,15 +1,19 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
+	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 	"tomerab.com/cam-hub/internal/application"
 	"tomerab.com/cam-hub/internal/httpserver"
-	"tomerab.com/cam-hub/internal/onvif"
+	"tomerab.com/cam-hub/internal/repos"
+	"tomerab.com/cam-hub/internal/services"
 )
 
 func main() {
@@ -17,24 +21,43 @@ func main() {
 		Level: slog.LevelDebug,
 	}))
 
-	err := godotenv.Load()
+	err := godotenv.Load("/home/tomerab/VSCProjects/cam-hub/api/.env")
 	if err != nil {
 		logger.Error(err.Error())
 		os.Exit(1)
 	}
 
-	client, err := onvif.NewOnvifClient(onvif.OnvifClientParams{
-		Xaddr: "10.0.0.5:8899",
-	})
-
 	if err != nil {
 		logger.Error(err.Error())
 		os.Exit(1)
+	}
+
+	dbpool, err := pgxpool.New(context.Background(), os.Getenv("POSTGRES_DSN"))
+	if err != nil {
+		logger.Error(err.Error())
+		os.Exit(1)
+	}
+	defer dbpool.Close()
+
+	transport := http.Transport{
+		MaxIdleConns:        100,
+		MaxIdleConnsPerHost: 10,
+		IdleConnTimeout:     90 * time.Second,
+	}
+	httpClient := http.Client{
+		Transport: &transport,
+		Timeout:   5 * time.Second,
 	}
 
 	app := &application.Application{
-		Logger: logger,
-		Client: client,
+		Logger:     logger,
+		DB:         dbpool,
+		HttpClient: &httpClient,
+		CameraService: &services.CameraService{
+			CamRepo:      repos.NewPgxCameraRepo(dbpool),
+			CamCredsRepo: repos.NewPgxCameraCredsRepo(dbpool),
+			Logger:       logger,
+		},
 	}
 
 	srv := http.Server{

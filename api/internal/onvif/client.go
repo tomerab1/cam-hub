@@ -2,15 +2,17 @@ package onvif
 
 import (
 	"log/slog"
+	"net/http"
 
 	"github.com/IOTechSystems/onvif"
 )
 
 type OnvifClientParams struct {
-	Xaddr    string
-	Username string
-	Password string
-	Logger   *slog.Logger
+	Xaddr      string
+	Username   string
+	Password   string
+	Logger     *slog.Logger
+	HttpClient *http.Client
 }
 
 type OnvifClient struct {
@@ -20,9 +22,10 @@ type OnvifClient struct {
 
 func NewOnvifClient(params OnvifClientParams) (*OnvifClient, error) {
 	dev, err := onvif.NewDevice(onvif.DeviceParams{
-		Xaddr:    params.Xaddr,
-		Username: params.Username,
-		Password: params.Password,
+		Xaddr:      params.Xaddr,
+		Username:   params.Username,
+		Password:   params.Password,
+		HttpClient: params.HttpClient,
 	})
 
 	if err != nil {
