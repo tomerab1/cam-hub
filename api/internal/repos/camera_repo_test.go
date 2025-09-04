@@ -55,7 +55,7 @@ func TestUpsertCamera(t *testing.T) {
 		}
 		defer tx.Rollback(ctx)
 
-		err = repo.UpsertCamera(ctx, tx, nil)
+		err = repo.UpsertCameraTx(ctx, tx, nil)
 		if err == nil {
 			t.Error("expected error for nil camera, got nil")
 		}
@@ -85,7 +85,7 @@ func TestUpsertCamera(t *testing.T) {
 		}
 		defer tx.Rollback(ctx)
 
-		err = repo.UpsertCamera(ctx, tx, camera)
+		err = repo.UpsertCameraTx(ctx, tx, camera)
 		if err != nil {
 			t.Errorf("upsertCamera failed: %v", err)
 		}
@@ -119,7 +119,7 @@ func TestUpsertCamera(t *testing.T) {
 		}
 		defer tx.Rollback(ctx)
 
-		err = repo.UpsertCamera(ctx, tx, camera)
+		err = repo.UpsertCameraTx(ctx, tx, camera)
 		if err == nil {
 			t.Error("expected database error, got nil")
 		}

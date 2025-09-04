@@ -1,5 +1,7 @@
 package v1
 
+import "time"
+
 type PairDeviceReq struct {
 	UUID       string `json:"uuid"`
 	Addr       string `json:"addr"`
@@ -10,4 +12,11 @@ type PairDeviceReq struct {
 
 type UnpairDeviceReq struct {
 	UUID string `json:"uuid"`
+}
+
+type DiscoveryEvent struct {
+	Type string    `json:"type"`
+	UUID string    `json:"uuid"`
+	Addr string    `json:"addr"`
+	At   time.Time `json:"at"`
 }
