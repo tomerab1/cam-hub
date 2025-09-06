@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"os"
 	"time"
 
 	"github.com/go-co-op/gocron/v2"
@@ -11,6 +12,13 @@ import (
 	v1 "tomerab.com/cam-hub/internal/contracts/v1"
 	"tomerab.com/cam-hub/internal/onvif"
 	"tomerab.com/cam-hub/internal/repos"
+)
+
+const (
+	hydrateUpdatedAddress uint8 = iota
+	hydrateNewDevice
+	hydrateErr
+	hydrateNone
 )
 
 type DiscoveryService struct {
@@ -45,37 +53,59 @@ func (svc *DiscoveryService) Discover(ctx context.Context) {
 	matches := onvif.DiscoverNewCameras(svc.Logger)
 
 	for _, match := range matches.Matches {
-		isUpdated := svc.hydrateDb(ctx, match.UUID, match.Xaddr)
+		status := svc.hydrateDb(ctx, match.UUID, match.Xaddr)
 		if err := svc.updateCache(ctx, match.UUID, match.Xaddr); err != nil {
 			svc.Logger.Error(err.Error())
 		}
 
-		if isUpdated {
+		switch status {
+		case hydrateUpdatedAddress:
 			svc.SseChan <- v1.DiscoveryEvent{
 				Type: "device_ip_changed",
 				UUID: match.UUID,
 				Addr: match.Xaddr,
 				At:   time.Now(),
 			}
+		case hydrateNewDevice:
+			svc.SseChan <- v1.DiscoveryEvent{
+				Type: "device_new",
+				UUID: match.UUID,
+				Addr: match.Xaddr,
+				At:   time.Now(),
+			}
+		default:
+			if os.Getenv("ENV_TYPE") == "dev" {
+				// For testing the ui.
+				svc.SseChan <- v1.DiscoveryEvent{
+					Type: "device_new",
+					UUID: match.UUID,
+					Addr: match.Xaddr,
+					At:   time.Now(),
+				}
+			}
 		}
 	}
 }
 
-func (svc *DiscoveryService) hydrateDb(ctx context.Context, uuid string, addr string) bool {
+func (svc *DiscoveryService) hydrateDb(ctx context.Context, uuid string, addr string) uint8 {
 	cam, err := svc.CamerasRepo.FindOne(ctx, uuid)
 	if err != nil {
 		svc.Logger.Error(err.Error())
-		return false
+		return hydrateErr
+	}
+
+	if cam == nil {
+		return hydrateNewDevice
 	}
 
 	// if camera is already paired and the address has changed.
-	if cam != nil && cam.Addr != addr {
+	if cam.Addr != addr {
 		cam.Addr = addr
 		svc.CamerasRepo.Save(ctx, cam)
-		return true
+		return hydrateUpdatedAddress
 	}
 
-	return false
+	return hydrateNone
 }
 
 func (svc *DiscoveryService) updateCache(ctx context.Context, uuid string, addr string) error {
