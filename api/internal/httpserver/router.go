@@ -1,7 +1,6 @@
 package httpserver
 
 import (
-	"os"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -20,11 +19,11 @@ func NewRouter(app *application.Application) *chi.Mux {
 	r.Use(commonHeaders)
 
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{os.Getenv("VITE_DEV_ADDR")},
+		AllowedOrigins:   []string{"*"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
 		ExposedHeaders:   []string{"Link"},
-		AllowCredentials: true,
+		AllowCredentials: false,
 		MaxAge:           300,
 	}))
 

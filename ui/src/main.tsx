@@ -7,7 +7,9 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 import App from "./App.tsx";
-import { createTheme, ThemeProvider } from "@mui/material";
+import { createTheme, styled, ThemeProvider } from "@mui/material";
+import { MaterialDesignContent, SnackbarProvider } from "notistack";
+import DiscoverySSE from "./components/SSEDiscovery.tsx";
 
 const customTheme = createTheme({
 	palette: {
@@ -19,10 +21,29 @@ const customTheme = createTheme({
 	},
 });
 
+const StyledMaterialDesignContent = styled(MaterialDesignContent)(() => ({
+	"&.notistack-MuiContent-success": {
+		backgroundColor: "oklch(79.2% 0.209 151.711)",
+	},
+	"&.notistack-MuiContent-error": {
+		backgroundColor: "oklch(63.7% 0.237 25.331)",
+	},
+}));
+
 createRoot(document.getElementById("root")!).render(
 	<StrictMode>
-		<ThemeProvider theme={customTheme}>
-			<App />
-		</ThemeProvider>
+		<SnackbarProvider
+			maxSnack={3}
+			autoHideDuration={2000}
+			Components={{
+				success: StyledMaterialDesignContent,
+				error: StyledMaterialDesignContent,
+			}}
+		>
+			<ThemeProvider theme={customTheme}>
+				<DiscoverySSE />
+				<App />
+			</ThemeProvider>
+		</SnackbarProvider>
 	</StrictMode>
 );

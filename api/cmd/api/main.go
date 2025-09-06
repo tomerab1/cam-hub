@@ -11,9 +11,12 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/go-co-op/gocron/v2"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
+	"github.com/redis/go-redis/v9"
 	"tomerab.com/cam-hub/internal/application"
+	v1 "tomerab.com/cam-hub/internal/contracts/v1"
 	"tomerab.com/cam-hub/internal/httpserver"
 	"tomerab.com/cam-hub/internal/repos"
 	"tomerab.com/cam-hub/internal/services"
@@ -24,7 +27,7 @@ func main() {
 		Level: slog.LevelDebug,
 	}))
 
-	err := godotenv.Load("/home/tomerab/VSCProjects/cam-hub/api/.env")
+	err := godotenv.Load()
 	if err != nil {
 		logger.Error(err.Error())
 		os.Exit(1)
@@ -51,16 +54,56 @@ func main() {
 		Transport: &transport,
 		Timeout:   5 * time.Second,
 	}
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     os.Getenv("REDIS_CACHE"),
+		Password: os.Getenv("REDIS_PASSWORD"),
+		DB:       0,
+	})
+	defer rdb.Close()
+
+	if err := rdb.Ping(context.Background()).Err(); err != nil {
+		logger.Error("redis ping failed", "err", err)
+		os.Exit(1)
+	}
+
+	sched, err := gocron.NewScheduler()
+	if err != nil {
+		logger.Error(err.Error())
+		os.Exit(1)
+	}
+	defer sched.Shutdown()
+
+	camRepo := repos.NewPgxCameraRepo(dbpool)
+
+	sseChan := make(chan v1.DiscoveryEvent, 24)
+	dscSvc := &services.DiscoveryService{
+		Rdb: &repos.RedisRepo{
+			Rdb:    rdb,
+			Logger: logger,
+		},
+		CamerasRepo: camRepo,
+		Sched:       sched,
+		Logger:      logger,
+		SseChan:     sseChan,
+	}
+	err = dscSvc.InitJobs(context.Background())
+	if err != nil {
+		logger.Error("Failed to init jobs", "err", err.Error())
+		os.Exit(1)
+	}
+	dscSvc.Sched.Start()
 
 	app := &application.Application{
 		Logger:     logger,
 		DB:         dbpool,
 		HttpClient: &httpClient,
 		CameraService: &services.CameraService{
-			CamRepo:      repos.NewPgxCameraRepo(dbpool),
+			CamRepo:      camRepo,
 			CamCredsRepo: repos.NewPgxCameraCredsRepo(dbpool),
 			Logger:       logger,
 		},
+		DiscoveryService: dscSvc,
+		SseChan:          sseChan,
 	}
 
 	srv := http.Server{

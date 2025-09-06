@@ -11,7 +11,8 @@ import (
 
 type CameraRepoIface interface {
 	Begin(ctx context.Context) (pgx.Tx, error)
-	UpsertCamera(ctx context.Context, tx pgx.Tx, cam *models.Camera) error
+	UpsertCameraTx(ctx context.Context, tx pgx.Tx, cam *models.Camera) error
+	UpsertCamera(ctx context.Context, cam *models.Camera) error
 	FindExistingPaired(ctx context.Context, uuids []string) ([]bool, error)
 	FindOne(ctx context.Context, uuid string) (*models.Camera, error)
 	Save(ctx context.Context, cam *models.Camera) error
@@ -32,12 +33,42 @@ func (repo *PgxCameraRepo) Begin(ctx context.Context) (pgx.Tx, error) {
 	return repo.DB.Begin(ctx)
 }
 
-func (repo *PgxCameraRepo) UpsertCamera(ctx context.Context, tx pgx.Tx, cam *models.Camera) error {
-	if cam == nil {
-		return fmt.Errorf("invalid argument: camera is null")
-	}
+func (repo *PgxCameraRepo) UpsertCameraTx(ctx context.Context, tx pgx.Tx, cam *models.Camera) error {
+	// TODO(tomer): Remove this, better to fail fast
+	// if cam == nil {
+	// 	return fmt.Errorf("invalid argument: camera is null")
+	// }
 
 	_, err := tx.Exec(ctx, `
+		INSERT INTO cameras (
+			id, name, manufacturer, model, firmwareVersion, serialNumber, hardwareId, addr, isPaired
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+		ON CONFLICT (id) DO UPDATE SET
+			name = EXCLUDED.name,
+			manufacturer = EXCLUDED.manufacturer,
+			model = EXCLUDED.model,
+			firmwareVersion = EXCLUDED.firmwareVersion,
+			serialNumber = EXCLUDED.serialNumber,
+			hardwareId = EXCLUDED.hardwareId,
+			addr = EXCLUDED.addr,
+			isPaired = EXCLUDED.isPaired
+	`,
+		cam.UUID,
+		cam.CameraName,
+		cam.Manufacturer,
+		cam.Model,
+		cam.FirmwareVersion,
+		cam.SerialNumber,
+		cam.HardwareId,
+		cam.Addr,
+		cam.IsPaired,
+	)
+
+	return err
+}
+
+func (repo *PgxCameraRepo) UpsertCamera(ctx context.Context, cam *models.Camera) error {
+	_, err := repo.DB.Exec(ctx, `
 		INSERT INTO cameras (
 			id, name, manufacturer, model, firmwareVersion, serialNumber, hardwareId, addr, isPaired
 		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)

@@ -3,10 +3,12 @@ package v1
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
 	"tomerab.com/cam-hub/internal/api"
+	"tomerab.com/cam-hub/internal/application"
 	v1 "tomerab.com/cam-hub/internal/contracts/v1"
 	"tomerab.com/cam-hub/internal/onvif"
 	"tomerab.com/cam-hub/internal/onvif/discovery"
@@ -103,4 +105,30 @@ func unpairCamera(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+func discoverySSE(app *application.Application) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Connection", "keep-alive")
+
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			http.Error(w, "streaming unsupported", http.StatusInternalServerError)
+			return
+		}
+
+		ctx := r.Context()
+		for {
+			select {
+			case evt := <-app.SseChan:
+				data, _ := json.Marshal(evt)
+				fmt.Fprintf(w, "data: %s\n\n", data)
+				flusher.Flush()
+			case <-ctx.Done():
+				return
+			}
+		}
+	}
 }

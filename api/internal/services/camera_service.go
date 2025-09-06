@@ -75,7 +75,7 @@ func (svc *CameraService) storeCameraAndCredentials(ctx context.Context, camera 
 	}
 	defer tx.Rollback(ctx)
 
-	if err := svc.CamRepo.UpsertCamera(ctx, tx, camera); err != nil {
+	if err := svc.CamRepo.UpsertCameraTx(ctx, tx, camera); err != nil {
 		return fmt.Errorf("failed to upsert camera: %w", err)
 	}
 

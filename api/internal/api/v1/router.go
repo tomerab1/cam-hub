@@ -14,5 +14,7 @@ func LoadRoutes(app *application.Application) *chi.Mux {
 		r.With(appMiddleware(app)).Patch("/", unpairCamera)
 	})
 
+	r.Get("/events/discovery", discoverySSE(app))
+
 	return r
 }
