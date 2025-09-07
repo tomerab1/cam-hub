@@ -41,70 +41,59 @@ func filterUUIDS(ctx context.Context, camRepo repos.CameraRepoIface, matches []d
 	return filtered, err
 }
 
-func getDiscoveredDevices(w http.ResponseWriter, r *http.Request) {
-	app := appFromCtx(r.Context())
-	discovered := onvif.DiscoverNewCameras(app.Logger)
+func getDiscoveredDevices(app *application.Application) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		discovered := onvif.DiscoverNewCameras(app.Logger)
 
-	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-	defer cancel()
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
 
-	filteredMatches, err := filterUUIDS(ctx, app.CameraService.CamRepo, discovered.Matches)
-	if err != nil {
-		serverError(w, r, err, app.Logger)
-		return
+		filteredMatches, err := filterUUIDS(ctx, app.CameraService.CamRepo, discovered.Matches)
+		if err != nil {
+			serverError(w, r, err, app.Logger)
+			return
+		}
+
+		app.WriteJSON(w, r, discovery.WsDiscoveryDto{Matches: filteredMatches}, http.StatusOK)
 	}
-
-	raw, err := json.Marshal(discovery.WsDiscoveryDto{Matches: filteredMatches})
-	if err != nil {
-		serverError(w, r, err, app.Logger)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(raw)
 }
 
-func pairCamera(w http.ResponseWriter, r *http.Request) {
-	app := appFromCtx(r.Context())
+func pairCamera(app *application.Application) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req v1.PairDeviceReq
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		defer r.Body.Close()
 
-	var req v1.PairDeviceReq
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+
+		uuid := r.PathValue("uuid")
+		camera, err := app.CameraService.Pair(ctx, uuid, req)
+		if err != nil {
+			serverError(w, r, err, app.Logger)
+			return
+		}
+
+		app.WriteJSON(w, r, camera, http.StatusCreated)
 	}
-	defer r.Body.Close()
-
-	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-	defer cancel()
-
-	camera, err := app.CameraService.Pair(ctx, req)
-	if err != nil {
-		serverError(w, r, err, app.Logger)
-		return
-	}
-
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(camera)
 }
 
-func unpairCamera(w http.ResponseWriter, r *http.Request) {
-	app := appFromCtx(r.Context())
-	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-	defer cancel()
+func unpairCamera(app *application.Application) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
 
-	var req v1.UnpairDeviceReq
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+		uuid := r.PathValue("uuid")
+		if err := app.CameraService.Unpair(ctx, uuid); err != nil {
+			serverError(w, r, err, app.Logger)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
 	}
-	defer r.Body.Close()
-
-	if err := app.CameraService.Unpair(ctx, req); err != nil {
-		serverError(w, r, err, app.Logger)
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
 }
 
 func discoverySSE(app *application.Application) http.HandlerFunc {

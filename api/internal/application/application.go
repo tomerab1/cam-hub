@@ -1,6 +1,7 @@
 package application
 
 import (
+	"encoding/json"
 	"log/slog"
 	"net/http"
 
@@ -16,4 +17,12 @@ type Application struct {
 	CameraService    *services.CameraService
 	DiscoveryService *services.DiscoveryService
 	SseChan          chan v1.DiscoveryEvent
+}
+
+func (app *Application) WriteJSON(w http.ResponseWriter, r *http.Request, data any, status int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	if err := json.NewEncoder(w).Encode(data); err != nil {
+		app.Logger.Warn("Error writing json response", "err", err)
+	}
 }

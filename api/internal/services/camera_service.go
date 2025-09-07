@@ -22,7 +22,7 @@ type CameraService struct {
 	Logger       *slog.Logger
 }
 
-func (svc *CameraService) connectAndGetDeviceInfo(req v1.PairDeviceReq) (*device.GetDeviceInfoDto, error) {
+func (svc *CameraService) connectAndGetDeviceInfo(uuid string, req v1.PairDeviceReq) (*device.GetDeviceInfoDto, error) {
 	client, err := onvif.NewOnvifClient(onvif.OnvifClientParams{
 		Xaddr:    req.Addr,
 		Username: req.Username,
@@ -40,7 +40,7 @@ func (svc *CameraService) connectAndGetDeviceInfo(req v1.PairDeviceReq) (*device
 
 	// TODO(tomer): Check failure reason, if critical return err to user.
 	if err := svc.tryCreateUser(client, req); err != nil {
-		svc.Logger.Warn("Failed to create user on device", "error", err, "uuid", req.UUID)
+		svc.Logger.Warn("Failed to create user on device", "error", err, "uuid", uuid)
 	}
 
 	return &info, nil
@@ -54,9 +54,9 @@ func (svc *CameraService) tryCreateUser(client *onvif.OnvifClient, req v1.PairDe
 	})
 }
 
-func (svc *CameraService) buildCameraModel(req v1.PairDeviceReq, info *device.GetDeviceInfoDto) *models.Camera {
+func (svc *CameraService) buildCameraModel(uuid string, req v1.PairDeviceReq, info *device.GetDeviceInfoDto) *models.Camera {
 	return &models.Camera{
-		UUID:            req.UUID,
+		UUID:            uuid,
 		Addr:            req.Addr,
 		CameraName:      req.CameraName,
 		HardwareId:      info.HardwareId,
@@ -68,7 +68,7 @@ func (svc *CameraService) buildCameraModel(req v1.PairDeviceReq, info *device.Ge
 	}
 }
 
-func (svc *CameraService) storeCameraAndCredentials(ctx context.Context, camera *models.Camera, req v1.PairDeviceReq) error {
+func (svc *CameraService) storeCameraAndCredentials(ctx context.Context, camera *models.Camera, uuid string, req v1.PairDeviceReq) error {
 	tx, err := svc.CamRepo.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
@@ -80,7 +80,7 @@ func (svc *CameraService) storeCameraAndCredentials(ctx context.Context, camera 
 	}
 
 	creds := &models.CameraCreds{
-		UUID:     req.UUID,
+		UUID:     uuid,
 		Username: req.Username,
 		Password: req.Password,
 	}
@@ -95,26 +95,26 @@ func (svc *CameraService) storeCameraAndCredentials(ctx context.Context, camera 
 	return nil
 }
 
-func (svc *CameraService) Pair(ctx context.Context, req v1.PairDeviceReq) (*models.Camera, error) {
-	devInfo, err := svc.connectAndGetDeviceInfo(req)
+func (svc *CameraService) Pair(ctx context.Context, uuid string, req v1.PairDeviceReq) (*models.Camera, error) {
+	devInfo, err := svc.connectAndGetDeviceInfo(uuid, req)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to device: %w", err)
 	}
 
-	camera := svc.buildCameraModel(req, devInfo)
+	camera := svc.buildCameraModel(uuid, req, devInfo)
 
-	err = svc.storeCameraAndCredentials(ctx, camera, req)
+	err = svc.storeCameraAndCredentials(ctx, camera, uuid, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to store camera data: %w", err)
 	}
 
-	svc.Logger.Info("Camera paired successfully", "uuid", req.UUID, "addr", req.Addr)
+	svc.Logger.Info("Camera paired successfully", "uuid", uuid, "addr", req.Addr)
 	return camera, nil
 }
 
-func (svc *CameraService) Unpair(ctx context.Context, req v1.UnpairDeviceReq) error {
-	cam, err := svc.CamRepo.FindOne(ctx, req.UUID)
+func (svc *CameraService) Unpair(ctx context.Context, uuid string) error {
+	cam, err := svc.CamRepo.FindOne(ctx, uuid)
 	if err != nil {
 		return err
 	}
