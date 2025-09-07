@@ -122,3 +122,7 @@ func (svc *CameraService) Unpair(ctx context.Context, uuid string) error {
 	cam.IsPaired = false
 	return svc.CamRepo.Save(ctx, cam)
 }
+
+func (svc *CameraService) GetCameras(ctx context.Context, offset, limit int) ([]*models.Camera, error) {
+	return svc.CamRepo.FindMany(ctx, offset, limit)
+}

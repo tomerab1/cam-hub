@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"tomerab.com/cam-hub/internal/api"
@@ -119,5 +120,34 @@ func discoverySSE(app *application.Application) http.HandlerFunc {
 				return
 			}
 		}
+	}
+}
+
+func getCameras(app *application.Application) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+
+		queryParams := r.URL.Query()
+		offset, err := strconv.Atoi(queryParams.Get("offset"))
+
+		if err != nil {
+			app.WriteJSON(w, r, api.ErrorEnvp{"error": err.Error()}, http.StatusBadRequest)
+			return
+		}
+
+		limit, err := strconv.Atoi(queryParams.Get("limit"))
+		if err != nil {
+			app.WriteJSON(w, r, api.ErrorEnvp{"error": err.Error()}, http.StatusBadRequest)
+			return
+		}
+
+		cams, err := app.CameraService.GetCameras(ctx, offset, limit)
+		if err != nil {
+			app.WriteJSON(w, r, api.ErrorEnvp{"error": err.Error()}, http.StatusBadRequest)
+			return
+		}
+
+		app.WriteJSON(w, r, cams, http.StatusOK)
 	}
 }

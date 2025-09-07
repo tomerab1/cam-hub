@@ -1,4 +1,4 @@
-import { Box, Button, Typography } from "@mui/material";
+import { Box, Button, Container, Typography } from "@mui/material";
 import { StatCard } from "../components/StatusCard";
 import {
 	CameraAltRounded,
@@ -8,9 +8,11 @@ import {
 import WifiFindIcon from "@mui/icons-material/WifiFind";
 import { CameraCard } from "../components/CameraCard";
 import { useNavigate } from "react-router-dom";
+import { useCameras } from "../providers/CamerasProvider";
 
 export default function HomePage() {
 	const navigate = useNavigate();
+	const { cameras, loading, error } = useCameras();
 
 	return (
 		<Box
@@ -123,7 +125,8 @@ export default function HomePage() {
 							paddingY: "0.125rem",
 						}}
 					>
-						4 cameras
+						{cameras ? cameras.length : 0}{" "}
+						{cameras && cameras.length == 1 ? "camera" : "cameras"}
 					</Typography>
 				</Box>
 				<Box
@@ -133,26 +136,37 @@ export default function HomePage() {
 						gap: 2.5,
 					}}
 				>
-					<CameraCard
-						imgUri="src/assets/backyard_camera.jpg"
-						location="Backyard camera"
-						status="online"
-					/>
-					<CameraCard
-						imgUri="src/assets/frontdoor_camera.jpg"
-						location="Backyard camera"
-						status="online"
-					/>
-					<CameraCard
-						imgUri="src/assets/backyard_camera.jpg"
-						location="Backyard camera"
-						status="offline"
-					/>
-					<CameraCard
-						imgUri="src/assets/backyard_camera.jpg"
-						location="Backyard camera"
-						status="offline"
-					/>
+					<Box sx={{ marginX: "auto", marginTop: "1.5rem" }}>
+						{loading && (
+							<Typography
+								variant="h6"
+								fontWeight="bold"
+								sx={{ color: "oklch(82% 0.001 106.424)" }}
+							>
+								Loading…
+							</Typography>
+						)}
+						{error && (
+							<Typography
+								variant="h6"
+								fontWeight="bold"
+								sx={{ color: "oklch(82% 0.001 106.424)" }}
+							>
+								Error: {error}
+							</Typography>
+						)}
+					</Box>
+					{!loading &&
+						!error &&
+						cameras.map((cam) => (
+							<CameraCard
+								key={cam.uuid}
+								id={cam.uuid}
+								imgUri="../assets/backyard_camera.jpg"
+								location={cam.camera_name || cam.uuid}
+								status={cam.is_paired ? "online" : "offline"}
+							/>
+						))}
 				</Box>
 			</Box>
 		</Box>

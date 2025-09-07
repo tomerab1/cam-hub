@@ -10,6 +10,7 @@ func LoadRoutes(app *application.Application) *chi.Mux {
 
 	r.Route("/cameras", func(r chi.Router) {
 		r.Get("/discovery", getDiscoveredDevices(app))
+		r.Get("/", getCameras(app))
 		r.Post("/{uuid}/pair", pairCamera(app))
 		r.Patch("/{uuid}/pair", unpairCamera(app))
 	})
