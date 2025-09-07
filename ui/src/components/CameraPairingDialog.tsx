@@ -26,20 +26,22 @@ export default function CameraPairingDialog({
 		const formData = new FormData(event.currentTarget);
 		const formJson = Object.fromEntries(formData.entries());
 		const pairReq: PairCameraDto = {
-			...(formJson as Omit<PairCameraDto, "uuid" | "addr">),
-			uuid,
+			...(formJson as Omit<PairCameraDto, "addr">),
 			addr,
 		};
 
 		const sendPairingReq = async () => {
 			try {
 				console.log(pairReq);
-				const resp = await fetch("http://localhost:5555/api/v1/cameras", {
-					method: "POST",
-					mode: "cors",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify(pairReq),
-				});
+				const resp = await fetch(
+					`http://localhost:5555/api/v1/cameras/${uuid}/pair`,
+					{
+						method: "POST",
+						mode: "cors",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify(pairReq),
+					}
+				);
 
 				console.log(resp);
 			} catch (err) {

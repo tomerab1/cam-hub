@@ -13,7 +13,7 @@ export default function CameraDiscoveryPage() {
 	const discoverCameras = async () => {
 		try {
 			setLoading(true);
-			const resp = await fetch("http://localhost:5555/api/v1/cameras");
+			const resp = await fetch("http://localhost:5555/api/v1/cameras/discovery");
 			const matches: DiscoveryDto = await resp.json();
 			setMatches(matches);
 			console.log(matches);
