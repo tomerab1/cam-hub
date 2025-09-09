@@ -1,4 +1,11 @@
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import {
+	createContext,
+	useCallback,
+	useContext,
+	useEffect,
+	useMemo,
+	useState,
+} from "react";
 import type { CameraDto } from "../contracts/CameraDto";
 
 type Ctx = {
@@ -6,7 +13,11 @@ type Ctx = {
 	loading: boolean;
 	error: string | null;
 	refresh: () => void;
-	upsert: (cam: Partial<CameraDto> & { uuid: string }) => void;
+	upsert: (
+		cam: Partial<CameraDto> & { uuid: string; whepUrl: string | null }
+	) => void;
+	getStreamUrl: (uuid: string) => Promise<string | null>;
+	invalidateStreamUrl: (uuid: string) => void;
 };
 
 const CameraDtosCtx = createContext<Ctx | null>(null);
@@ -16,6 +27,13 @@ export function CameraProvider({ children }: { children: React.ReactNode }) {
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const [tick, setTick] = useState(0);
+
+	const streamCache = useMemo(
+		() => new Map<string, { url: string | null; ts: number }>(),
+		[]
+	);
+	const inflight = useMemo(() => new Map<string, Promise<string | null>>(), []);
+	const STREAM_TTL_MS = 60_000;
 
 	useEffect(() => {
 		(async () => {
@@ -63,6 +81,47 @@ export function CameraProvider({ children }: { children: React.ReactNode }) {
 		});
 	};
 
+	const getStreamUrl = useCallback(
+		async (uuid: string): Promise<string | null> => {
+			const now = Date.now();
+			const cached = streamCache.get(uuid);
+			if (cached && now - cached.ts < STREAM_TTL_MS) return cached.url;
+
+			const existing = inflight.get(uuid);
+			if (existing) return existing;
+
+			const p = (async () => {
+				try {
+					const resp = await fetch(
+						`http://localhost:5555/api/v1/cameras/${uuid}/stream`
+					);
+					if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+					const data: { url: string | null } = await resp.json();
+					streamCache.set(uuid, { url: data.url, ts: Date.now() });
+					return data.url;
+				} catch (err) {
+					console.error(err);
+					streamCache.set(uuid, { url: null, ts: Date.now() });
+					return null;
+				} finally {
+					inflight.delete(uuid);
+				}
+			})();
+
+			inflight.set(uuid, p);
+			return p;
+		},
+		[inflight, streamCache]
+	);
+
+	const invalidateStreamUrl = useCallback(
+		(uuid: string) => {
+			streamCache.delete(uuid);
+			inflight.delete(uuid);
+		},
+		[inflight, streamCache]
+	);
+
 	useEffect(() => {
 		const es = new EventSource("http://localhost:5555/api/v1/events/discovery");
 		es.onmessage = (e) => {
@@ -70,15 +129,17 @@ export function CameraProvider({ children }: { children: React.ReactNode }) {
 				const evt = JSON.parse(e.data);
 				if (evt.type === "device_new") {
 					upsert({ uuid: evt.uuid, addr: evt.addr });
+					invalidateStreamUrl(evt.uuid);
 				} else if (evt.type === "device_ip_changed") {
 					upsert({ uuid: evt.uuid, addr: evt.addr });
+					invalidateStreamUrl(evt.uuid);
 				}
 			} catch (err) {
 				console.error(err);
 			}
 		};
 		return () => es.close();
-	}, []);
+	}, [invalidateStreamUrl]);
 
 	const value = useMemo<Ctx>(
 		() => ({
@@ -87,8 +148,10 @@ export function CameraProvider({ children }: { children: React.ReactNode }) {
 			error,
 			refresh: () => setTick((t) => t + 1),
 			upsert,
+			getStreamUrl,
+			invalidateStreamUrl,
 		}),
-		[cameras, loading, error]
+		[cameras, loading, error, getStreamUrl, invalidateStreamUrl]
 	);
 
 	return (

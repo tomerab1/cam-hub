@@ -18,6 +18,7 @@ import (
 	"tomerab.com/cam-hub/internal/application"
 	v1 "tomerab.com/cam-hub/internal/contracts/v1"
 	"tomerab.com/cam-hub/internal/httpserver"
+	"tomerab.com/cam-hub/internal/mtxapi"
 	"tomerab.com/cam-hub/internal/repos"
 	"tomerab.com/cam-hub/internal/services"
 )
@@ -93,17 +94,24 @@ func main() {
 	}
 	dscSvc.Sched.Start()
 
+	credsRepo := repos.NewPgxCameraCredsRepo(dbpool)
 	app := &application.Application{
-		Logger:     logger,
-		DB:         dbpool,
-		HttpClient: &httpClient,
-		CameraService: &services.CameraService{
-			CamRepo:      camRepo,
-			CamCredsRepo: repos.NewPgxCameraCredsRepo(dbpool),
-			Logger:       logger,
-		},
+		Logger:           logger,
+		DB:               dbpool,
 		DiscoveryService: dscSvc,
 		SseChan:          sseChan,
+		HttpClient:       &httpClient,
+		CameraService: &services.CameraService{
+			CamRepo:      camRepo,
+			CamCredsRepo: credsRepo,
+			Logger:       logger,
+		},
+		MtxClient: &mtxapi.MtxClient{
+			Logger:       logger,
+			CamRepo:      camRepo,
+			CamCredsRepo: credsRepo,
+			HttpClient:   &httpClient,
+		},
 	}
 
 	srv := http.Server{

@@ -9,7 +9,7 @@ export default function App() {
 			<Routes>
 				<Route path="/" element={<HomePage />} />
 				<Route path="/discovery" element={<CameraDiscoveryPage />} />
-				<Route path="/camera/:cameraId" element={<CameraViewerPage />} />
+				<Route path="/camera/:id" element={<CameraViewerPage />} />
 			</Routes>
 		</Router>
 	);

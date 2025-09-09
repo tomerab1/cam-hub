@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	v1 "tomerab.com/cam-hub/internal/contracts/v1"
+	"tomerab.com/cam-hub/internal/mtxapi"
 	"tomerab.com/cam-hub/internal/services"
 )
 
@@ -16,6 +17,7 @@ type Application struct {
 	HttpClient       *http.Client
 	CameraService    *services.CameraService
 	DiscoveryService *services.DiscoveryService
+	MtxClient        *mtxapi.MtxClient
 	SseChan          chan v1.DiscoveryEvent
 }
 

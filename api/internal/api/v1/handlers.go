@@ -151,3 +151,19 @@ func getCameras(app *application.Application) http.HandlerFunc {
 		app.WriteJSON(w, r, cams, http.StatusOK)
 	}
 }
+
+func getCameraStream(app *application.Application) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+
+		uuid := r.PathValue("uuid")
+		streamUrl, err := app.MtxClient.Publish(ctx, uuid)
+		if err != nil {
+			app.WriteJSON(w, r, api.ErrorEnvp{"error": err.Error()}, http.StatusInternalServerError)
+			return
+		}
+
+		app.WriteJSON(w, r, v1.CameraStreamUrl{Url: streamUrl}, http.StatusOK)
+	}
+}

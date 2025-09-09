@@ -1,4 +1,4 @@
-import { Box, Button, Container, Typography } from "@mui/material";
+import { Box, Button, Typography } from "@mui/material";
 import { StatCard } from "../components/StatusCard";
 import {
 	CameraAltRounded,
@@ -136,8 +136,8 @@ export default function HomePage() {
 						gap: 2.5,
 					}}
 				>
-					<Box sx={{ marginX: "auto", marginTop: "1.5rem" }}>
-						{loading && (
+					{loading && (
+						<Box sx={{ marginX: "auto", marginTop: "1.5rem" }}>
 							<Typography
 								variant="h6"
 								fontWeight="bold"
@@ -145,8 +145,10 @@ export default function HomePage() {
 							>
 								Loading…
 							</Typography>
-						)}
-						{error && (
+						</Box>
+					)}
+					{error && (
+						<Box sx={{ marginX: "auto", marginTop: "1.5rem" }}>
 							<Typography
 								variant="h6"
 								fontWeight="bold"
@@ -154,15 +156,15 @@ export default function HomePage() {
 							>
 								Error: {error}
 							</Typography>
-						)}
-					</Box>
+						</Box>
+					)}
 					{!loading &&
 						!error &&
 						cameras.map((cam) => (
 							<CameraCard
 								key={cam.uuid}
 								id={cam.uuid}
-								imgUri="../assets/backyard_camera.jpg"
+								imgUri="/assets/backyard_camera.jpg"
 								location={cam.camera_name || cam.uuid}
 								status={cam.is_paired ? "online" : "offline"}
 							/>

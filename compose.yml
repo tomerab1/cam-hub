@@ -12,7 +12,7 @@ services:
     environment:
       MTX_WEBRTC: "yes"
       MTX_RTSPTRANSPORTS: "tcp"
-      MTX_WEBRTCADDITIONALHOSTS: "127.0.0.1"
+      MTX_WEBRTCADDITIONALHOSTS: "10.0.0.8,localhost"
     restart: unless-stopped
   db:
     image: postgres:latest

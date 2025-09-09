@@ -20,7 +20,7 @@ export function CameraCard({ id, status, imgUri, location }: CameraCardProps) {
 			sx={{
 				borderRadius: 3,
 				minWidth: 60,
-				maxWidth: 250,
+				maxWidth: 300,
 				overflow: "hidden",
 				border: `1.75px solid ${alpha("#ffffff", 0.08)}`,
 				boxShadow: `0 10px 30px ${alpha("#000", 0.25)}`,
@@ -31,7 +31,11 @@ export function CameraCard({ id, status, imgUri, location }: CameraCardProps) {
 				},
 			}}
 		>
-			<CardMedia sx={{ height: 250, mb: "0.5rem" }} image={image} />
+			<CardMedia
+				component="img"
+				image={image}
+				sx={{ height: 300, mb: "0.5rem" }}
+			/>
 
 			<Box sx={{ px: "1rem", py: "0.625rem" }}>
 				<Box
