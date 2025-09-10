@@ -14,6 +14,7 @@ func LoadRoutes(app *application.Application) *chi.Mux {
 		r.Get("/", getCameras(app))
 		r.Post("/{uuid}/pair", pairCamera(app))
 		r.Patch("/{uuid}/pair", unpairCamera(app))
+		r.Post("/{uuid}/ptz/move", moveCamera(app))
 	})
 
 	r.Get("/events/discovery", discoverySSE(app))

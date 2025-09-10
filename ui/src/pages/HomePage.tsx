@@ -160,7 +160,7 @@ export default function HomePage() {
 					)}
 					{!loading &&
 						!error &&
-						cameras.map((cam) => (
+						cameras?.map((cam) => (
 							<CameraCard
 								key={cam.uuid}
 								id={cam.uuid}

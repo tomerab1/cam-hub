@@ -17,6 +17,7 @@ import GlowCard from "../components/GlowCard";
 import WebRTCPlayer from "../components/WebRTCPlayer";
 import CameraDetailsCard from "../components/CameraDetailsCard";
 import { useCameras } from "../providers/CamerasProvider";
+import PtzControls from "../components/PtzControls";
 
 export default function CameraViewerPage() {
 	const { id: cameraUUID } = useParams<{ id: string }>();
@@ -114,7 +115,7 @@ export default function CameraViewerPage() {
 								sx={{
 									position: "relative",
 									width: "100%",
-									pt: `${(1 / ratio) * 70}%`,
+									pt: `${(1 / ratio) * 80}%`,
 									borderRadius: 2,
 									overflow: "hidden",
 									bgcolor: "black",
@@ -157,10 +158,15 @@ export default function CameraViewerPage() {
 						</CardContent>
 					</GlowCard>
 
-					{/* RIGHT: details card */}
+					{/* RIGHT: details card & PTZ */}
 					<Box
 						sx={{
-							flex: { xs: "1 1 auto", md: "0 0 360px" },
+							flex: {
+								xs: "1 1 auto",
+								md: "0 0 360px",
+								display: "flex",
+								flexDirection: "column",
+							},
 							maxWidth: { md: 380 },
 						}}
 					>
@@ -171,6 +177,11 @@ export default function CameraViewerPage() {
 							onCopy={onCopy}
 							onRetry={handleRetryStream}
 						/>
+						<GlowCard sx={{ marginTop: "1rem", flexGrow: "1" }}>
+							<CardContent sx={{ height: "100%" }}>
+								<PtzControls uuid={cameraUUID!} />
+							</CardContent>
+						</GlowCard>
 					</Box>
 				</Box>
 			</Container>

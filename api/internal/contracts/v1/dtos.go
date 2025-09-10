@@ -1,6 +1,10 @@
 package v1
 
-import "time"
+import (
+	"time"
+
+	"tomerab.com/cam-hub/internal/utils"
+)
 
 type PairDeviceReq struct {
 	Addr       string `json:"addr"`
@@ -18,4 +22,8 @@ type DiscoveryEvent struct {
 
 type CameraStreamUrl struct {
 	Url string `json:"url"`
+}
+
+type MoveCameraReq struct {
+	Translation utils.Vec2D `json:"translation"`
 }

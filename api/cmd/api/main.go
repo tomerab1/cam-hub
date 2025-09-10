@@ -28,7 +28,7 @@ func main() {
 		Level: slog.LevelDebug,
 	}))
 
-	err := godotenv.Load()
+	err := godotenv.Load("/home/tomerab/VSCProjects/cam-hub/api/.env")
 	if err != nil {
 		logger.Error(err.Error())
 		os.Exit(1)
@@ -50,6 +50,7 @@ func main() {
 		MaxIdleConns:        100,
 		MaxIdleConnsPerHost: 10,
 		IdleConnTimeout:     90 * time.Second,
+		DisableKeepAlives:   true,
 	}
 	httpClient := http.Client{
 		Transport: &transport,
@@ -75,6 +76,7 @@ func main() {
 	defer sched.Shutdown()
 
 	camRepo := repos.NewPgxCameraRepo(dbpool)
+	ptzRepo := repos.NewPgxPtzTokenRepo(dbpool)
 
 	sseChan := make(chan v1.DiscoveryEvent, 24)
 	dscSvc := &services.DiscoveryService{
@@ -104,6 +106,13 @@ func main() {
 		CameraService: &services.CameraService{
 			CamRepo:      camRepo,
 			CamCredsRepo: credsRepo,
+			Logger:       logger,
+		},
+		PtzService: &services.PtzService{
+			CamRepo:      camRepo,
+			PtzTokenRepo: ptzRepo,
+			CamCredsRepo: credsRepo,
+			Rdb:          dscSvc.Rdb,
 			Logger:       logger,
 		},
 		MtxClient: &mtxapi.MtxClient{
