@@ -10,6 +10,7 @@ import App from "./App.tsx";
 import { createTheme, styled, ThemeProvider } from "@mui/material";
 import { MaterialDesignContent, SnackbarProvider } from "notistack";
 import DiscoverySSE from "./components/SSEDiscovery.tsx";
+import { CameraProvider } from "./providers/CamerasProvider.tsx";
 
 const customTheme = createTheme({
 	palette: {
@@ -40,10 +41,12 @@ createRoot(document.getElementById("root")!).render(
 				error: StyledMaterialDesignContent,
 			}}
 		>
-			<ThemeProvider theme={customTheme}>
-				<DiscoverySSE />
-				<App />
-			</ThemeProvider>
+			<CameraProvider>
+				<ThemeProvider theme={customTheme}>
+					<DiscoverySSE />
+					<App />
+				</ThemeProvider>
+			</CameraProvider>
 		</SnackbarProvider>
 	</StrictMode>
 );

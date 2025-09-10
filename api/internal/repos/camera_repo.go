@@ -15,6 +15,7 @@ type CameraRepoIface interface {
 	UpsertCamera(ctx context.Context, cam *models.Camera) error
 	FindExistingPaired(ctx context.Context, uuids []string) ([]bool, error)
 	FindOne(ctx context.Context, uuid string) (*models.Camera, error)
+	FindMany(ctx context.Context, offset, limit int) ([]*models.Camera, error)
 	Save(ctx context.Context, cam *models.Camera) error
 	Delete(ctx context.Context, uuid string) error
 }
@@ -175,4 +176,22 @@ func (repo *PgxCameraRepo) Delete(ctx context.Context, uuid string) error {
 	}
 
 	return err
+}
+
+func (repo *PgxCameraRepo) FindMany(ctx context.Context, offset, limit int) ([]*models.Camera, error) {
+	var cams []*models.Camera
+	err := pgxscan.Select(ctx, repo.DB, &cams, `SELECT
+													id,
+													name,
+													manufacturer,
+													model,
+													firmwareversion,
+													serialnumber,
+													hardwareid,
+													addr,
+													ispaired
+												FROM cameras
+												LIMIT $1 OFFSET $2
+												`, limit, offset)
+	return cams, err
 }

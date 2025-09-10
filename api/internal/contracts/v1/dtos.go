@@ -15,3 +15,7 @@ type DiscoveryEvent struct {
 	Addr string    `json:"addr"`
 	At   time.Time `json:"at"`
 }
+
+type CameraStreamUrl struct {
+	Url string `json:"url"`
+}

@@ -1,5 +1,7 @@
 package api
 
+type ErrorEnvp = map[string]any
+
 func CountElems[T any](elems []T, pred func(elem T) bool) int {
 	count := 0
 	for _, elem := range elems {
