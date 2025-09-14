@@ -169,6 +169,22 @@ func getCameraStream(app *application.Application) http.HandlerFunc {
 	}
 }
 
+func deleteCameraStream(app *application.Application) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+
+		uuid := r.PathValue("uuid")
+		err := app.MtxClient.Delete(ctx, uuid)
+		if err != nil {
+			app.WriteJSON(w, r, api.ErrorEnvp{"error": err.Error()}, http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
 func moveCamera(app *application.Application) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -192,6 +208,7 @@ func moveCamera(app *application.Application) http.HandlerFunc {
 
 		dto := v1.MoveCameraReq{
 			Translation: req.Translation,
+			Zoom:        req.Zoom,
 		}
 
 		if err := app.PtzService.MoveCamera(ctx, uuid, dto); err != nil {

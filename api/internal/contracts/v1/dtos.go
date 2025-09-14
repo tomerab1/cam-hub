@@ -25,5 +25,6 @@ type CameraStreamUrl struct {
 }
 
 type MoveCameraReq struct {
-	Translation utils.Vec2D `json:"translation"`
+	Translation *utils.Vec2D `json:"translation"`
+	Zoom        *float32     `json:"zoom"`
 }

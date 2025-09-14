@@ -1,10 +1,12 @@
 import {
+	AddOutlined,
 	KeyboardArrowDownOutlined,
 	KeyboardArrowLeftOutlined,
 	KeyboardArrowRightOutlined,
 	KeyboardArrowUpOutlined,
+	RemoveOutlined,
 } from "@mui/icons-material";
-import { Box, IconButton } from "@mui/material";
+import { Box, IconButton, Tooltip } from "@mui/material";
 import { useCallback, useEffect, useRef } from "react";
 import { type MoveCameraDto } from "../contracts/MoveCameraDto";
 
@@ -12,25 +14,27 @@ interface PtzControlsProps {
 	uuid: string;
 }
 
+type ZoomAction = "in" | "out";
+
 const NUDGE = 0.12;
-const REPEAT_MS = 150;
-const COOLDOWN_MS = 120;
+const COOLDOWN_MS = 900;
 
 export default function PtzControls({ uuid }: PtzControlsProps) {
-	const repeatTimer = useRef<number | null>(null);
-	const lastSentAt = useRef<number>(0);
+	const lastSentAt = useRef(0);
 
 	const sendMove = useCallback(
-		async (dto: MoveCameraDto) => {
+		async function (dx = 0, dy = 0) {
 			const now = Date.now();
 			if (now - lastSentAt.current < COOLDOWN_MS) return;
 			lastSentAt.current = now;
 
+			const dto: MoveCameraDto = { translation: { x: dx, y: dy }, zoom: null };
 			try {
 				await fetch(`http://localhost:5555/api/v1/cameras/${uuid}/ptz/move`, {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
 					body: JSON.stringify(dto),
+					keepalive: true,
 				});
 			} catch (err) {
 				console.error(err);
@@ -39,95 +43,120 @@ export default function PtzControls({ uuid }: PtzControlsProps) {
 		[uuid]
 	);
 
-	const nudge = useCallback(
-		(dx = 0, dy = 0) => {
-			const dto: MoveCameraDto = { translation: { x: dx, y: dy } };
-			void sendMove(dto);
+	const sendZoom = useCallback(
+		async function (factor: number) {
+			const now = Date.now();
+			if (now - lastSentAt.current < COOLDOWN_MS) return;
+			lastSentAt.current = now;
+			const dto: MoveCameraDto = {
+				translation: null,
+				zoom: factor,
+			};
+			try {
+				await fetch(`http://localhost:5555/api/v1/cameras/${uuid}/ptz/move`, {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify(dto),
+					keepalive: true,
+				});
+			} catch (err) {
+				console.error(err);
+			}
 		},
-		[sendMove]
+		[uuid]
 	);
-
-	const startHold = useCallback(
-		(dx = 0, dy = 0) => {
-			nudge(dx, dy);
-			stopHold();
-			repeatTimer.current = window.setInterval(() => nudge(dx, dy), REPEAT_MS);
-		},
-		[nudge]
-	);
-
-	const stopHold = useCallback(() => {
-		if (repeatTimer.current) {
-			clearInterval(repeatTimer.current);
-			repeatTimer.current = null;
-		}
-	}, []);
 
 	useEffect(() => {
-		const onBlur = () => stopHold();
-		window.addEventListener("blur", onBlur);
-		document.addEventListener("visibilitychange", onBlur);
-		return () => {
-			window.removeEventListener("blur", onBlur);
-			document.removeEventListener("visibilitychange", onBlur);
-			stopHold();
-		};
-	}, [stopHold]);
+		function onKeyDown(e: KeyboardEvent) {
+			if (e.repeat) return;
+			switch (e.key) {
+				case "ArrowUp":
+					sendMove(0, NUDGE);
+					break;
+				case "ArrowDown":
+					sendMove(0, -NUDGE);
+					break;
+				case "ArrowLeft":
+					sendMove(NUDGE, 0);
+					break;
+				case "ArrowRight":
+					sendMove(-NUDGE, 0);
+					break;
+				default:
+					return;
+			}
+			e.preventDefault();
+		}
+		window.addEventListener("keydown", onKeyDown);
+		return () => window.removeEventListener("keydown", onKeyDown);
+	}, [sendMove]);
+
+	const mkCtrlBtn = (
+		area: string,
+		dx: number,
+		dy: number,
+		Icon: React.ElementType,
+		label: string
+	) => (
+		<Tooltip title={label}>
+			<IconButton
+				sx={{ gridArea: area }}
+				onClick={() => sendMove(dx, dy)}
+				onPointerDown={(e) => {
+					if (e.pointerType !== "mouse") sendMove(dx, dy);
+				}}
+			>
+				<Icon />
+			</IconButton>
+		</Tooltip>
+	);
+
+	const mkZoomBtn = (
+		action: ZoomAction,
+		Icon: React.ElementType,
+		factor: number = 0.001
+	) => {
+		return (
+			<Tooltip title={action}>
+				<IconButton
+					onClick={() => sendZoom(action === "in" ? factor : -factor)}
+				>
+					<Icon />
+				</IconButton>
+			</Tooltip>
+		);
+	};
 
 	return (
-		<Box sx={{ height: "100%", display: "flex", alignItems: "center" }}>
+		<Box
+			sx={{
+				height: "100%",
+				display: "flex",
+				alignItems: "center",
+				justifyContent: "space-between",
+			}}
+		>
 			<div
 				style={{
 					display: "grid",
 					gridTemplateColumns: "repeat(3, 40px)",
 					gridTemplateRows: "repeat(3, 40px)",
 					gridTemplateAreas: `". up ."
-                              "left . right"
-                              ". down ."`,
+                               "left . right"
+                               ". down ."`,
 					placeItems: "center",
 					gap: 6,
 				}}
 			>
-				<IconButton
-					sx={{ gridArea: "up" }}
-					onClick={() => nudge(0, NUDGE)}
-					onPointerDown={() => startHold(0, NUDGE)}
-					onPointerUp={stopHold}
-					onPointerLeave={stopHold}
-				>
-					<KeyboardArrowUpOutlined />
-				</IconButton>
-
-				<IconButton
-					sx={{ gridArea: "right" }}
-					onClick={() => nudge(-NUDGE, 0)}
-					onPointerDown={() => startHold(-NUDGE, 0)}
-					onPointerUp={stopHold}
-					onPointerLeave={stopHold}
-				>
-					<KeyboardArrowRightOutlined />
-				</IconButton>
-
-				<IconButton
-					sx={{ gridArea: "left" }}
-					onClick={() => nudge(NUDGE, 0)}
-					onPointerDown={() => startHold(NUDGE, 0)}
-					onPointerUp={stopHold}
-					onPointerLeave={stopHold}
-				>
-					<KeyboardArrowLeftOutlined />
-				</IconButton>
-
-				<IconButton
-					sx={{ gridArea: "down" }}
-					onClick={() => nudge(0, -NUDGE)}
-					onPointerDown={() => startHold(0, -NUDGE)}
-					onPointerUp={stopHold}
-					onPointerLeave={stopHold}
-				>
-					<KeyboardArrowDownOutlined />
-				</IconButton>
+				{mkCtrlBtn("up", 0, NUDGE, KeyboardArrowUpOutlined, "Up")}
+				{mkCtrlBtn("right", -NUDGE, 0, KeyboardArrowRightOutlined, "Right")}
+				{mkCtrlBtn("left", NUDGE, 0, KeyboardArrowLeftOutlined, "Left")}
+				{mkCtrlBtn("down", 0, -NUDGE, KeyboardArrowDownOutlined, "Down")}
 			</div>
+			<Box sx={{ marginRight: "1rem" }}>
+				{mkZoomBtn("in", AddOutlined)}
+				{mkZoomBtn("out", RemoveOutlined)}
+			</Box>
 		</Box>
 	);
 }

@@ -57,6 +57,7 @@ func (svc *PtzService) MoveCamera(ctx context.Context, uuid string, move v1.Move
 	if err := client.MoveCamera(ptz.MoveCameraDto{
 		Token:       token,
 		Translation: move.Translation,
+		Zoom:        move.Zoom,
 	}); err != nil {
 		if isInvalidToken(err) {
 			newTok, rerr := client.GetPtzProfile()
@@ -69,6 +70,7 @@ func (svc *PtzService) MoveCamera(ctx context.Context, uuid string, move v1.Move
 			return client.MoveCamera(ptz.MoveCameraDto{
 				Token:       token,
 				Translation: move.Translation,
+				Zoom:        move.Zoom,
 			})
 		}
 		return err

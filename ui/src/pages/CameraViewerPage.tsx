@@ -10,7 +10,6 @@ import {
 	IconButton,
 	Skeleton,
 } from "@mui/material";
-import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import RefreshIcon from "@mui/icons-material/Refresh";
 
 import GlowCard from "../components/GlowCard";
@@ -18,10 +17,12 @@ import WebRTCPlayer from "../components/WebRTCPlayer";
 import CameraDetailsCard from "../components/CameraDetailsCard";
 import { useCameras } from "../providers/CamerasProvider";
 import PtzControls from "../components/PtzControls";
+import { NavigateBeforeOutlined } from "@mui/icons-material";
 
 export default function CameraViewerPage() {
 	const { id: cameraUUID } = useParams<{ id: string }>();
-	const { cameras, getStreamUrl, invalidateStreamUrl } = useCameras();
+	const { cameras, getStreamUrl, invalidateStreamUrl, deleteStream } =
+		useCameras();
 
 	const currentCamera = useMemo(
 		() => cameras.find((c) => c.uuid === cameraUUID),
@@ -60,11 +61,12 @@ export default function CameraViewerPage() {
 
 	const handleRetryStream = useCallback(() => {
 		if (!cameraUUID) return;
+		deleteStream(cameraUUID);
 		invalidateStreamUrl(cameraUUID);
 		setErr(null);
 		setStreamUrl(null);
 		getStreamUrl(cameraUUID).then((u) => setStreamUrl(u));
-	}, [cameraUUID, invalidateStreamUrl, getStreamUrl]);
+	}, [cameraUUID, invalidateStreamUrl, getStreamUrl, deleteStream]);
 
 	const handleVideoDims = useCallback((w: number, h: number) => {
 		if (h) setRatio(w / h);
@@ -87,7 +89,7 @@ export default function CameraViewerPage() {
 				{/* header */}
 				<Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
 					<IconButton size="small" onClick={() => history.back()}>
-						<ArrowBackIcon />
+						<NavigateBeforeOutlined />
 					</IconButton>
 					<Typography variant="h5" sx={{ flexGrow: 1 }}>
 						{currentCamera?.camera_name ?? "Camera Viewer"}

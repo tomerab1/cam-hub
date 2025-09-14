@@ -14,8 +14,15 @@ import (
 )
 
 const (
-	RtspPort       = 554
-	FFMPEGTemplate = `/usr/bin/ffmpeg -loglevel warning -rtsp_transport tcp -i rtsp://%s:%s@%s:%d/channel=1_stream=0.sdp?real_stream -map 0:v -map 0:a? -c:v libx264 -pix_fmt yuv420p -profile:v baseline -level:v 3.1 -preset veryfast -tune zerolatency -g 60 -keyint_min 60 -sc_threshold 0 -c:a libopus -ar 48000 -ac 2 -b:a 64k -f rtsp -rtsp_transport tcp rtsp://%s:$RTSP_PORT/$MTX_PATH`
+	RtspPort = 554
+	// Template command to send mediamtx to run on demand, uses ffmpeg to change video and audio encoding to a browser friendly one.
+	FFMPEGTemplate = `/usr/bin/ffmpeg
+					 -loglevel warning -rtsp_transport tcp -i 
+					  rtsp://%s:%s@%s:%d/channel=1_stream=0.sdp?real_stream -map 0:v -map 0:a? -c:v libx264 -pix_fmt yuv420p -profile:v baseline
+					  -level:v 3.1 -preset veryfast -tune zerolatency -g 60 -keyint_min 60
+					  -sc_threshold 0 -c:a libopus -ar 48000 -ac 2 -b:a 64k -f rtsp -rtsp_transport tcp rtsp://%s:$RTSP_PORT/$MTX_PATH`
+	MediaMtxAddCameraUrl    = "/v3/config/paths/add/"
+	MediaMtxDeleteCameraUrl = "/v3/config/paths/delete/"
 )
 
 type MtxClient struct {
@@ -66,7 +73,7 @@ func (client *MtxClient) Publish(ctx context.Context, uuid string) (string, erro
 		return "", err
 	}
 
-	mediaMtxUrl := fmt.Sprintf("%s/v3/config/paths/add/%s", os.Getenv("MEDIAMTX_ADDR"), uuid)
+	mediaMtxUrl := fmt.Sprintf("%s%s%s", os.Getenv("MEDIAMTX_ADDR"), MediaMtxAddCameraUrl, uuid)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, mediaMtxUrl, bytes.NewReader(body))
 	if err != nil {
 		return "", err
@@ -88,6 +95,32 @@ func (client *MtxClient) Publish(ctx context.Context, uuid string) (string, erro
 	return whepURL, nil
 }
 
+func (client *MtxClient) Delete(ctx context.Context, uuid string) error {
+	if !client.doesStreamExists(ctx, uuid) {
+		return nil
+	}
+
+	mediaMtxUrl := fmt.Sprintf("%s%s%s", os.Getenv("MEDIAMTX_ADDR"), MediaMtxDeleteCameraUrl, uuid)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, mediaMtxUrl, nil)
+	if err != nil {
+		return err
+	}
+
+	resp, err := client.HttpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		var mtxErr MtxErrorDto
+		_ = json.NewDecoder(resp.Body).Decode(&mtxErr)
+		return fmt.Errorf("mediamtx returned %s: %s", resp.Status, mtxErr.Error)
+	}
+
+	return nil
+}
+
 func (client *MtxClient) doesStreamExists(ctx context.Context, uuid string) bool {
 	mediaMtxUrl := fmt.Sprintf("%s/v3/config/paths/get/%s", os.Getenv("MEDIAMTX_ADDR"), uuid)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, mediaMtxUrl, nil)
@@ -103,7 +136,6 @@ func (client *MtxClient) doesStreamExists(ctx context.Context, uuid string) bool
 		return false
 	}
 
-	fmt.Println("here", resp.StatusCode)
 	return resp.StatusCode == http.StatusOK
 }
 
@@ -117,7 +149,7 @@ func (client *MtxClient) getCameraDetails(ctx context.Context, uuid string) (*ca
 	addr := cleanAddr[0]
 	creds, err := client.CamCredsRepo.FindOne(ctx, uuid)
 	if err != nil {
-		return nil, nil
+		return nil, err
 	}
 
 	return &camDetails{
