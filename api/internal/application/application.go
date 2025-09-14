@@ -17,6 +17,7 @@ type Application struct {
 	HttpClient       *http.Client
 	CameraService    *services.CameraService
 	DiscoveryService *services.DiscoveryService
+	PtzService       *services.PtzService
 	MtxClient        *mtxapi.MtxClient
 	SseChan          chan v1.DiscoveryEvent
 }

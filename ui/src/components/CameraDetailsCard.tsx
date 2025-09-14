@@ -48,7 +48,9 @@ export default function CameraDetailsCard({
 	];
 
 	return (
-		<GlowCard sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
+		<GlowCard
+			sx={{ height: "fit-content", display: "flex", flexDirection: "column" }}
+		>
 			<CardHeader
 				title="Camera Details"
 				action={

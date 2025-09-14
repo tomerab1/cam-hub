@@ -10,17 +10,19 @@ import {
 	IconButton,
 	Skeleton,
 } from "@mui/material";
-import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import RefreshIcon from "@mui/icons-material/Refresh";
 
 import GlowCard from "../components/GlowCard";
 import WebRTCPlayer from "../components/WebRTCPlayer";
 import CameraDetailsCard from "../components/CameraDetailsCard";
 import { useCameras } from "../providers/CamerasProvider";
+import PtzControls from "../components/PtzControls";
+import { NavigateBeforeOutlined } from "@mui/icons-material";
 
 export default function CameraViewerPage() {
 	const { id: cameraUUID } = useParams<{ id: string }>();
-	const { cameras, getStreamUrl, invalidateStreamUrl } = useCameras();
+	const { cameras, getStreamUrl, invalidateStreamUrl, deleteStream } =
+		useCameras();
 
 	const currentCamera = useMemo(
 		() => cameras.find((c) => c.uuid === cameraUUID),
@@ -59,11 +61,12 @@ export default function CameraViewerPage() {
 
 	const handleRetryStream = useCallback(() => {
 		if (!cameraUUID) return;
+		deleteStream(cameraUUID);
 		invalidateStreamUrl(cameraUUID);
 		setErr(null);
 		setStreamUrl(null);
 		getStreamUrl(cameraUUID).then((u) => setStreamUrl(u));
-	}, [cameraUUID, invalidateStreamUrl, getStreamUrl]);
+	}, [cameraUUID, invalidateStreamUrl, getStreamUrl, deleteStream]);
 
 	const handleVideoDims = useCallback((w: number, h: number) => {
 		if (h) setRatio(w / h);
@@ -86,7 +89,7 @@ export default function CameraViewerPage() {
 				{/* header */}
 				<Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
 					<IconButton size="small" onClick={() => history.back()}>
-						<ArrowBackIcon />
+						<NavigateBeforeOutlined />
 					</IconButton>
 					<Typography variant="h5" sx={{ flexGrow: 1 }}>
 						{currentCamera?.camera_name ?? "Camera Viewer"}
@@ -114,7 +117,7 @@ export default function CameraViewerPage() {
 								sx={{
 									position: "relative",
 									width: "100%",
-									pt: `${(1 / ratio) * 70}%`,
+									pt: `${(1 / ratio) * 80}%`,
 									borderRadius: 2,
 									overflow: "hidden",
 									bgcolor: "black",
@@ -157,10 +160,15 @@ export default function CameraViewerPage() {
 						</CardContent>
 					</GlowCard>
 
-					{/* RIGHT: details card */}
+					{/* RIGHT: details card & PTZ */}
 					<Box
 						sx={{
-							flex: { xs: "1 1 auto", md: "0 0 360px" },
+							flex: {
+								xs: "1 1 auto",
+								md: "0 0 360px",
+								display: "flex",
+								flexDirection: "column",
+							},
 							maxWidth: { md: 380 },
 						}}
 					>
@@ -171,6 +179,11 @@ export default function CameraViewerPage() {
 							onCopy={onCopy}
 							onRetry={handleRetryStream}
 						/>
+						<GlowCard sx={{ marginTop: "1rem", flexGrow: "1" }}>
+							<CardContent sx={{ height: "100%" }}>
+								<PtzControls uuid={cameraUUID!} />
+							</CardContent>
+						</GlowCard>
 					</Box>
 				</Box>
 			</Container>

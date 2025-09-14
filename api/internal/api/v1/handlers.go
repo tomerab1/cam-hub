@@ -3,6 +3,7 @@ package v1
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -165,5 +166,65 @@ func getCameraStream(app *application.Application) http.HandlerFunc {
 		}
 
 		app.WriteJSON(w, r, v1.CameraStreamUrl{Url: streamUrl}, http.StatusOK)
+	}
+}
+
+func deleteCameraStream(app *application.Application) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+
+		uuid := r.PathValue("uuid")
+		err := app.MtxClient.Delete(ctx, uuid)
+		if err != nil {
+			app.WriteJSON(w, r, api.ErrorEnvp{"error": err.Error()}, http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func moveCamera(app *application.Application) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+
+		defer r.Body.Close()
+		dec := json.NewDecoder(r.Body)
+		dec.DisallowUnknownFields()
+
+		uuid := r.PathValue("uuid")
+		var req v1.MoveCameraReq
+		if err := dec.Decode(&req); err != nil {
+			app.WriteJSON(w, r, api.ErrorEnvp{"error": err.Error()}, http.StatusBadRequest)
+			return
+		}
+
+		dto := v1.MoveCameraReq{
+			Translation: req.Translation,
+			Zoom:        req.Zoom,
+		}
+
+		if err := app.PtzService.MoveCamera(ctx, uuid, dto); err != nil {
+			switch {
+			case errors.Is(err, repos.ErrNotFound):
+				app.WriteJSON(w, r, api.ErrorEnvp{"error": "camera not found"}, http.StatusNotFound)
+			case errors.Is(err, onvif.ErrNoPtz):
+				app.WriteJSON(w, r, api.ErrorEnvp{"error": "ptz not supported for this camera"}, http.StatusUnprocessableEntity)
+			case errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded):
+				app.WriteJSON(w, r, api.ErrorEnvp{"error": "operation timed out"}, http.StatusGatewayTimeout)
+			default:
+				app.WriteJSON(w, r, api.ErrorEnvp{"error": err.Error()}, http.StatusBadRequest)
+			}
+			return
+		}
+
+		w.WriteHeader(http.StatusNoContent)
 	}
 }

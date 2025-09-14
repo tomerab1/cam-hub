@@ -1,5 +1,16 @@
 package utils
 
+import "errors"
+
+var (
+	ErrNoFound = errors.New("element was not found")
+)
+
+type Vec2D struct {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+}
+
 type Pair[T, U any] struct {
 	First  T
 	Second U
@@ -40,4 +51,14 @@ func FilterElems[T any](elems []T, allocSz int, pred func(idx int, elem T) bool)
 	}
 
 	return filtered
+}
+
+func FindFirstIdx[T any](elems []T, pred func(idx int, elem T) bool) (int, error) {
+	for i, elem := range elems {
+		if pred(i, elem) {
+			return i, nil
+		}
+	}
+
+	return -1, ErrNoFound
 }

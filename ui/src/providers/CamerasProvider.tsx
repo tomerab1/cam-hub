@@ -18,6 +18,7 @@ type Ctx = {
 	) => void;
 	getStreamUrl: (uuid: string) => Promise<string | null>;
 	invalidateStreamUrl: (uuid: string) => void;
+	deleteStream: (uuid: string) => void;
 };
 
 const CameraDtosCtx = createContext<Ctx | null>(null);
@@ -43,13 +44,18 @@ export function CameraProvider({ children }: { children: React.ReactNode }) {
 				const res = await fetch(
 					"http://localhost:5555/api/v1/cameras?offset=0&limit=100"
 				);
-				if (!res.ok) throw new Error(`HTTP ${res.status}`);
+				if (!res.ok) {
+					throw new Error(`HTTP ${res.status}`);
+				}
 				const data: CameraDto[] = await res.json();
 				setCameraDtos(data);
 			} catch (e: unknown) {
 				console.error(e);
-				if (e instanceof Error) setError(e.message ?? "fetch failed");
-				else setError("Unknown error");
+				if (e instanceof Error) {
+					setError(e.message ?? "fetch failed");
+				} else {
+					setError("Unknown error");
+				}
 			} finally {
 				setLoading(false);
 			}
@@ -81,6 +87,25 @@ export function CameraProvider({ children }: { children: React.ReactNode }) {
 		});
 	};
 
+	const deleteStream = useCallback(async (uuid: string) => {
+		const ctrl = new AbortController();
+		try {
+			const resp = await fetch(
+				`http://localhost:5555/api/v1/cameras/${uuid}/stream`,
+				{
+					method: "DELETE",
+					signal: ctrl.signal,
+					keepalive: true,
+				}
+			);
+			if (!resp.ok || resp.status !== 404) {
+				throw new Error(`HTTP ${resp.status}`);
+			}
+		} catch (err) {
+			console.error(err);
+		}
+	}, []);
+
 	const getStreamUrl = useCallback(
 		async (uuid: string): Promise<string | null> => {
 			const now = Date.now();
@@ -95,13 +120,18 @@ export function CameraProvider({ children }: { children: React.ReactNode }) {
 					const resp = await fetch(
 						`http://localhost:5555/api/v1/cameras/${uuid}/stream`
 					);
-					if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+					if (!resp.ok) {
+						throw new Error(`HTTP ${resp.status}`);
+					}
+
 					const data: { url: string | null } = await resp.json();
 					streamCache.set(uuid, { url: data.url, ts: Date.now() });
+
 					return data.url;
 				} catch (err) {
 					console.error(err);
 					streamCache.set(uuid, { url: null, ts: Date.now() });
+
 					return null;
 				} finally {
 					inflight.delete(uuid);
@@ -132,6 +162,7 @@ export function CameraProvider({ children }: { children: React.ReactNode }) {
 					invalidateStreamUrl(evt.uuid);
 				} else if (evt.type === "device_ip_changed") {
 					upsert({ uuid: evt.uuid, addr: evt.addr });
+					deleteStream(evt.uuid);
 					invalidateStreamUrl(evt.uuid);
 				}
 			} catch (err) {
@@ -139,7 +170,7 @@ export function CameraProvider({ children }: { children: React.ReactNode }) {
 			}
 		};
 		return () => es.close();
-	}, [invalidateStreamUrl]);
+	}, [invalidateStreamUrl, deleteStream]);
 
 	const value = useMemo<Ctx>(
 		() => ({
@@ -150,8 +181,9 @@ export function CameraProvider({ children }: { children: React.ReactNode }) {
 			upsert,
 			getStreamUrl,
 			invalidateStreamUrl,
+			deleteStream,
 		}),
-		[cameras, loading, error, getStreamUrl, invalidateStreamUrl]
+		[cameras, loading, error, getStreamUrl, invalidateStreamUrl, deleteStream]
 	);
 
 	return (
