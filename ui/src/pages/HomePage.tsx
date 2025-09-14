@@ -78,20 +78,20 @@ export default function HomePage() {
 				>
 					<StatCard
 						title="Total Cameras"
-						value={8}
+						value={cameras.length}
 						icon={CameraAltRounded}
 						desc="Configured cameras"
 					/>
 					<StatCard
 						title="Online"
-						value={7}
+						value={cameras.length}
 						valueColor="oklch(87.1% 0.15 154.449)"
 						icon={SensorsRounded}
 						desc="Active connections"
 					/>
 					<StatCard
 						title="Alerts (24h)"
-						value={3}
+						value={0}
 						valueColor="oklch(83.7% 0.128 66.29)"
 						icon={WarningAmberRounded}
 						desc="Alert pending"

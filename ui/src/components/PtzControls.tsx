@@ -17,7 +17,7 @@ interface PtzControlsProps {
 type ZoomAction = "in" | "out";
 
 const NUDGE = 0.12;
-const COOLDOWN_MS = 900;
+const COOLDOWN_MS = 200;
 
 export default function PtzControls({ uuid }: PtzControlsProps) {
 	const lastSentAt = useRef(0);
@@ -68,7 +68,6 @@ export default function PtzControls({ uuid }: PtzControlsProps) {
 
 	useEffect(() => {
 		function onKeyDown(e: KeyboardEvent) {
-			if (e.repeat) return;
 			switch (e.key) {
 				case "ArrowUp":
 					sendMove(0, NUDGE);
@@ -99,13 +98,7 @@ export default function PtzControls({ uuid }: PtzControlsProps) {
 		label: string
 	) => (
 		<Tooltip title={label}>
-			<IconButton
-				sx={{ gridArea: area }}
-				onClick={() => sendMove(dx, dy)}
-				onPointerDown={(e) => {
-					if (e.pointerType !== "mouse") sendMove(dx, dy);
-				}}
-			>
+			<IconButton sx={{ gridArea: area }} onClick={() => sendMove(dx, dy)}>
 				<Icon />
 			</IconButton>
 		</Tooltip>
