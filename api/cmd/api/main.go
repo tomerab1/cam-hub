@@ -28,7 +28,7 @@ func main() {
 		Level: slog.LevelDebug,
 	}))
 
-	err := godotenv.Load("/home/tomerab/VSCProjects/cam-hub/api/.env")
+	err := godotenv.Load()
 	if err != nil {
 		logger.Error(err.Error())
 		os.Exit(1)

@@ -31,7 +31,7 @@ type DiscoveryService struct {
 
 func (svc *DiscoveryService) InitJobs(ctx context.Context) error {
 	job, err := svc.Sched.NewJob(
-		gocron.DurationJob(1*time.Minute),
+		gocron.DurationJob(time.Minute),
 		gocron.NewTask(func() {
 			runCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 			defer cancel()
@@ -39,6 +39,7 @@ func (svc *DiscoveryService) InitJobs(ctx context.Context) error {
 			svc.Discover(runCtx)
 		}),
 		gocron.WithSingletonMode(gocron.LimitModeWait),
+		gocron.JobOption(gocron.WithStartImmediately()),
 	)
 
 	if err != nil {

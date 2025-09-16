@@ -44,6 +44,7 @@ func DiscoverNewCameras(logger *slog.Logger) discovery.WsDiscoveryDto {
 
 			if err != nil {
 				logger.Debug(err.Error(), "iface", name)
+				return
 			}
 
 			for _, resp := range responses {
@@ -71,7 +72,6 @@ func DiscoverNewCameras(logger *slog.Logger) discovery.WsDiscoveryDto {
 			}
 		}(i.Name)
 	}
-
 	wg.Wait()
 	return discovered
 }
