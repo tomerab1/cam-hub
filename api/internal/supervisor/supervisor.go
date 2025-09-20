@@ -22,6 +22,7 @@ func NewSupervisor(maxProcs int) *Supervisor {
 		mtx:    sync.Mutex{},
 		procs:  make(map[string]*Proc),
 		exitCh: make(chan ExitEvent, maxProcs),
+		ctrlCh: make(chan CtrlEvent, maxProcs),
 		logger: slog.New(slog.NewJSONHandler(os.Stdout, nil)),
 	}
 }
@@ -37,13 +38,13 @@ func (visor *Supervisor) Run() {
 				"err", exit.err,
 			)
 		case ev := <-visor.ctrlCh:
-			switch ev.kind {
+			switch ev.Kind {
 			case CtrlRegister:
-				visor.Register(ev.camUUID, ev.args)
+				visor.Register(ev.CamUUID, ev.Args)
 			case CtrlUnregister:
-				visor.Unregister(ev.camUUID)
+				visor.Unregister(ev.CamUUID)
 			case CtrlShutdown:
-				visor.Shutdown()
+				return
 			}
 		}
 	}
@@ -51,6 +52,13 @@ func (visor *Supervisor) Run() {
 
 func (visor *Supervisor) Shutdown() {
 	visor.logger.Info("Shutting down")
+	visor.ctrlCh <- CtrlEvent{
+		Kind: CtrlShutdown,
+	}
+}
+
+func (visor *Supervisor) NotifyCtrl(ev CtrlEvent) {
+	visor.ctrlCh <- ev
 }
 
 func (visor *Supervisor) Register(camUUID string, args Args) {
@@ -106,8 +114,8 @@ func (visor *Supervisor) Unregister(camUUID string) {
 		visor.logger.Error("unregister: failed to find process", "uuid", camUUID)
 		return
 	}
-	p := proc.cmd.Process
 
+	p := proc.cmd.Process
 	err := p.Signal(syscall.SIGTERM)
 	if err != nil {
 		visor.logger.Error("unregister: SIGTERM failed", "err", err)

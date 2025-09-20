@@ -1,6 +1,11 @@
 package utils
 
-import "errors"
+import (
+	"context"
+	"errors"
+	"os"
+	"os/signal"
+)
 
 var (
 	ErrNoFound = errors.New("element was not found")
@@ -61,4 +66,18 @@ func FindFirstIdx[T any](elems []T, pred func(idx int, elem T) bool) (int, error
 	}
 
 	return -1, ErrNoFound
+}
+
+func GracefullShutdown(ctx context.Context, onShutdown func(), sigs ...os.Signal) (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithCancel(ctx)
+	c := make(chan os.Signal, 1)
+
+	signal.Notify(c, sigs...)
+	go func() {
+		<-c
+		onShutdown()
+		cancel()
+	}()
+
+	return ctx, cancel
 }

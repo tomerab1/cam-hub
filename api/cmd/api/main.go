@@ -17,6 +17,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"tomerab.com/cam-hub/internal/application"
 	v1 "tomerab.com/cam-hub/internal/contracts/v1"
+	"tomerab.com/cam-hub/internal/events/rabbitmq"
 	"tomerab.com/cam-hub/internal/httpserver"
 	"tomerab.com/cam-hub/internal/mtxapi"
 	"tomerab.com/cam-hub/internal/repos"
@@ -97,6 +98,12 @@ func main() {
 	dscSvc.Sched.Start()
 
 	credsRepo := repos.NewPgxCameraCredsRepo(dbpool)
+	bus, err := rabbitmq.NewBus(os.Getenv("RABBITMQ_ADDR"))
+	if err != nil {
+		logger.Error("Faild to create rabbitmq bus", "err", err.Error())
+		os.Exit(1)
+	}
+
 	app := &application.Application{
 		Logger:           logger,
 		DB:               dbpool,
@@ -121,6 +128,7 @@ func main() {
 			CamCredsRepo: credsRepo,
 			HttpClient:   &httpClient,
 		},
+		Bus: bus,
 	}
 
 	srv := http.Server{

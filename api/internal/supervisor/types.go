@@ -19,9 +19,9 @@ type ExitEvent struct {
 }
 
 type CtrlEvent struct {
-	kind    CtrlKind
-	camUUID string
-	args    Args
+	Kind    CtrlKind
+	CamUUID string
+	Args    Args
 }
 
 type Proc struct {
