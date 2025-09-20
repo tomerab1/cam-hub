@@ -1,6 +1,7 @@
 package supervisor
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -50,10 +51,24 @@ func (visor *Supervisor) Run() {
 	}
 }
 
+// Returns the revison of the camera.
+func (visor *Supervisor) GetCameraRevision(camUUID string) (int, error) {
+	p := visor.findProc(camUUID)
+	if p == nil {
+		return -1, fmt.Errorf("camera (%s) is not registered", camUUID)
+	}
+
+	return p.Version, nil
+}
+
 func (visor *Supervisor) Shutdown() {
 	visor.logger.Info("Shutting down")
 	visor.ctrlCh <- CtrlEvent{
 		Kind: CtrlShutdown,
+	}
+
+	for uuid := range visor.procs {
+		visor.Unregister(uuid)
 	}
 }
 
@@ -68,6 +83,8 @@ func (visor *Supervisor) Register(camUUID string, args Args) {
 	}
 
 	cmd := exec.Command("go", args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 
 	err := cmd.Start()
 	if err != nil {
@@ -79,6 +96,7 @@ func (visor *Supervisor) Register(camUUID string, args Args) {
 		}
 		return
 	}
+	visor.logger.Info("started new process", "pid", cmd.Process.Pid, "args", args)
 
 	visor.mtx.Lock()
 	defer visor.mtx.Unlock()

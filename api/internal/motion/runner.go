@@ -23,7 +23,7 @@ type Runner struct {
 
 func NewRunner(maxJobs int) *Runner {
 	return &Runner{
-		logger: slog.New(slog.NewTextHandler(os.Stdout, nil)),
+		logger: slog.New(slog.NewJSONHandler(os.Stdout, nil)),
 		sem:    make(chan struct{}, maxJobs),
 	}
 }

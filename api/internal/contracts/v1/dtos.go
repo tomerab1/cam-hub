@@ -20,6 +20,12 @@ type DiscoveryEvent struct {
 	At   time.Time `json:"at"`
 }
 
+type CameraPairedEvent struct {
+	UUID      string `json:"uuid"`
+	StreamUrl string `json:"url"`
+	Revision  int    `json:"revision"`
+}
+
 type CameraStreamUrl struct {
 	Url string `json:"url"`
 }

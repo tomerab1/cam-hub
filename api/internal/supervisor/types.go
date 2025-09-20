@@ -27,4 +27,5 @@ type CtrlEvent struct {
 type Proc struct {
 	procArgs Args
 	cmd      *exec.Cmd
+	Version  int // For revision control
 }

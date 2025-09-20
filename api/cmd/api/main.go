@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"os/signal"
 	"syscall"
 	"time"
 
@@ -22,6 +21,7 @@ import (
 	"tomerab.com/cam-hub/internal/mtxapi"
 	"tomerab.com/cam-hub/internal/repos"
 	"tomerab.com/cam-hub/internal/services"
+	"tomerab.com/cam-hub/internal/utils"
 )
 
 func main() {
@@ -31,19 +31,13 @@ func main() {
 
 	err := godotenv.Load()
 	if err != nil {
-		logger.Error(err.Error())
-		os.Exit(1)
+		panic(err.Error())
 	}
 
+	rootCtx := context.Background()
+	dbpool, err := pgxpool.New(rootCtx, os.Getenv("POSTGRES_DSN"))
 	if err != nil {
-		logger.Error(err.Error())
-		os.Exit(1)
-	}
-
-	dbpool, err := pgxpool.New(context.Background(), os.Getenv("POSTGRES_DSN"))
-	if err != nil {
-		logger.Error(err.Error())
-		os.Exit(1)
+		panic(err.Error())
 	}
 	defer dbpool.Close()
 
@@ -64,7 +58,7 @@ func main() {
 	})
 	defer rdb.Close()
 
-	if err := rdb.Ping(context.Background()).Err(); err != nil {
+	if err := rdb.Ping(rootCtx).Err(); err != nil {
 		logger.Error("redis ping failed", "err", err)
 		os.Exit(1)
 	}
@@ -90,18 +84,16 @@ func main() {
 		Logger:      logger,
 		SseChan:     sseChan,
 	}
-	err = dscSvc.InitJobs(context.Background())
+	err = dscSvc.InitJobs(rootCtx)
 	if err != nil {
-		logger.Error("Failed to init jobs", "err", err.Error())
-		os.Exit(1)
+		panic(err.Error())
 	}
 	dscSvc.Sched.Start()
 
 	credsRepo := repos.NewPgxCameraCredsRepo(dbpool)
 	bus, err := rabbitmq.NewBus(os.Getenv("RABBITMQ_ADDR"))
 	if err != nil {
-		logger.Error("Faild to create rabbitmq bus", "err", err.Error())
-		os.Exit(1)
+		panic(err.Error())
 	}
 
 	app := &application.Application{
@@ -135,33 +127,26 @@ func main() {
 		Addr:    os.Getenv("SERVER_ADDR"),
 		Handler: httpserver.NewRouter(app),
 	}
-
 	shutdownErrChan := make(chan error)
-	go func() {
-		quit := make(chan os.Signal, 1)
-		signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-
-		s := <-quit
-		logger.Info("Caught a signal", "signal", s.String())
-
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	onShutdown := func() {
+		ctx, cancel := context.WithTimeout(rootCtx, 10*time.Second)
 		defer cancel()
 
 		shutdownErrChan <- srv.Shutdown(ctx)
-	}()
+	}
+	_, cancel := utils.GracefullShutdown(rootCtx, onShutdown, syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
 
 	logger.Info(fmt.Sprintf("Server is listening on %s", srv.Addr))
 	err = srv.ListenAndServe()
 
 	if !errors.Is(err, http.ErrServerClosed) {
-		logger.Error("Error happend while returning for 'ListenAndServer()'", "err", err.Error())
-		os.Exit(1)
+		panic(err.Error())
 	}
 
 	err = <-shutdownErrChan
 	if err != nil {
-		logger.Error("Error happend while returning from 'Shutdown()'", "err", err.Error())
-		os.Exit(1)
+		panic(err.Error())
 	}
 
 	logger.Info("Shutting down the server...")

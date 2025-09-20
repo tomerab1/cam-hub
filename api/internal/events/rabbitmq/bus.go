@@ -3,6 +3,7 @@ package rabbitmq
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/rabbitmq/amqp091-go"
 	"tomerab.com/cam-hub/internal/events"
 )
@@ -28,31 +29,42 @@ func NewBus(url string) (*AMQPBus, error) {
 }
 
 func (bus *AMQPBus) Publish(ctx context.Context, exch, key string, body []byte, headrs map[string]any) error {
-	return nil
+	return bus.ch.Publish(exch, key, false, false, amqp091.Publishing{
+		Headers:      headrs,
+		Body:         body,
+		ContentType:  "application/json",
+		DeliveryMode: 2, // Persisten messages
+	})
 }
 
-func (bus *AMQPBus) Consume(ctx context.Context, queue string, h events.Handler) error {
-	msgs, err := bus.ch.Consume(queue, "", false, false, false, false, nil)
+func (bus *AMQPBus) Consume(ctx context.Context, queue, consumer string, h events.Handler) error {
+	consumerTag := consumer + "-" + uuid.NewString()
+	msgs, err := bus.ch.Consume(queue, consumerTag, false, false, false, false, nil)
 	if err != nil {
 		return err
 	}
 
 	go func() {
-		for m := range msgs {
-			msg := events.Message{
-				Body:        m.Body,
-				Key:         m.RoutingKey,
-				Headers:     m.Headers,
-				Redelivered: m.Redelivered,
-			}
+		for {
+			select {
+			case m := <-msgs:
+				msg := events.Message{
+					Body:        m.Body,
+					Key:         m.RoutingKey,
+					Headers:     m.Headers,
+					Redelivered: m.Redelivered,
+				}
 
-			switch h(ctx, msg) {
-			case events.Ack:
-				_ = m.Ack(false)
-			case events.NackRequeue:
-				_ = m.Nack(false, true)
-			case events.NackDiscard:
-				_ = m.Nack(false, false)
+				switch h(ctx, msg) {
+				case events.Ack:
+					_ = m.Ack(false)
+				case events.NackRequeue:
+					_ = m.Nack(false, true)
+				case events.NackDiscard:
+					_ = m.Nack(false, false)
+				}
+			case <-ctx.Done():
+				_ = bus.ch.Cancel(consumerTag, false)
 			}
 		}
 	}()

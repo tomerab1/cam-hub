@@ -13,7 +13,7 @@ const (
 
 type BusIface interface {
 	Publish(ctx context.Context, exc, key string, body []byte, headrs map[string]any) error
-	Consume(ctx context.Context, queue string, h Handler) error
+	Consume(ctx context.Context, queue, consumer string, h Handler) error
 	Close() error
 }
 
