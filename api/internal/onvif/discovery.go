@@ -14,14 +14,18 @@ import (
 	"tomerab.com/cam-hub/internal/onvif/discovery"
 )
 
-var hostPortRE = regexp.MustCompile("[0-9]+.+[0-9]+:[0-9]+")
-var uuidRE = regexp.MustCompile(`urn:uuid:([0-9a-fA-F-]{36})`)
+var (
+	hostPortRE = regexp.MustCompile("[0-9]+.+[0-9]+:[0-9]+")
+	uuidRE     = regexp.MustCompile(`urn:uuid:([0-9a-fA-F-]{36})`)
+	nvtRE      = regexp.MustCompile(`NetworkVideoTransmitter`)
+)
 
 type wsDiscoveryResp struct {
 	Matches []struct {
 		Match struct {
 			UUID  string `xml:"EndpointReference>Address"`
 			Xaddr string `xml:"XAddrs"`
+			Types string `xml:"Types"`
 		} `xml:"ProbeMatch"`
 	} `xml:"Body>ProbeMatches"`
 }
@@ -71,11 +75,18 @@ func DiscoverNewCameras(ctx context.Context, logger *slog.Logger) discovery.WsDi
 				}
 
 				for _, m := range out.Matches {
-					sub := uuidRE.FindStringSubmatch(m.Match.UUID)
-					if len(sub) < 2 {
-						logger.Warn(fmt.Sprintf("Could not find a submatch for %s", m.Match.UUID))
+					sub := nvtRE.FindStringSubmatch(m.Match.Types)
+					if len(sub) == 0 {
+						logger.Warn(fmt.Sprintf("Could not find submatch for: %s", m.Match.Types))
 						continue
 					}
+
+					sub = uuidRE.FindStringSubmatch(m.Match.UUID)
+					if len(sub) < 2 {
+						logger.Warn(fmt.Sprintf("Could not find a submatch for: %s", m.Match.UUID))
+						continue
+					}
+
 					match := discovery.WsDiscoveryMatch{
 						UUID:  sub[1],
 						Xaddr: hostPortRE.FindString(m.Match.Xaddr),

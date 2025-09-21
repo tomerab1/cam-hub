@@ -13,7 +13,9 @@ export default function CameraDiscoveryPage() {
 	const discoverCameras = async () => {
 		try {
 			setLoading(true);
-			const resp = await fetch("http://localhost:5555/api/v1/cameras/discovery");
+			const resp = await fetch(
+				"http://localhost:5555/api/v1/cameras/discovery"
+			);
 			const matches: DiscoveryDto = await resp.json();
 			setMatches(matches);
 			console.log(matches);
@@ -30,7 +32,7 @@ export default function CameraDiscoveryPage() {
 
 	return (
 		<Box sx={{ minHeight: "100vh", bgcolor: "background.default", py: 4 }}>
-			<Container maxWidth="md">
+			<Container maxWidth="lg">
 				<Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
 					<IconButton
 						aria-label="Go back"
