@@ -89,6 +89,7 @@ func (visor *Supervisor) Register(camUUID string, args Args) {
 	}
 
 	cmd := exec.Command("go", args...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Stdout = visor.loggerSink
 	cmd.Stderr = visor.loggerSink
 
@@ -142,18 +143,16 @@ func (visor *Supervisor) Unregister(camUUID string) {
 	visor.logger.Debug("unregister", "camUUID", camUUID)
 
 	p := proc.cmd.Process
-	err := p.Signal(syscall.SIGTERM)
-	if err != nil {
-		if err := p.Kill(); err != nil {
+	if err := syscall.Kill(-p.Pid, syscall.SIGTERM); err != nil {
+		if err := syscall.Kill(-p.Pid, syscall.SIGKILL); err != nil {
 			visor.logger.Error("unregister: kill failed", "uuid", camUUID, "err", err)
 		}
 	} else {
 		go func(p *os.Process) {
 			time.Sleep(5 * time.Second)
 			// Check if the process is still alive, if it is send sigkill
-			err := p.Signal(syscall.Signal(0))
-			if err == nil {
-				if err := p.Kill(); err != nil {
+			if err := syscall.Kill(-p.Pid, 0); err == nil {
+				if err := syscall.Kill(-p.Pid, syscall.SIGKILL); err != nil {
 					visor.logger.Error("unregister: kill failed", "uuid", camUUID, "err", err)
 				}
 			}

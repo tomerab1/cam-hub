@@ -1,6 +1,7 @@
 package motion
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
@@ -18,23 +19,25 @@ type MotionCtx struct {
 
 type Runner struct {
 	logger *slog.Logger
+	ctx    context.Context
 	sem    chan struct{}
 }
 
-func NewRunner(maxJobs int) *Runner {
+func NewRunner(ctx context.Context, maxJobs int) *Runner {
 	return &Runner{
 		logger: slog.New(slog.NewJSONHandler(os.Stdout, nil)),
 		sem:    make(chan struct{}, maxJobs),
+		ctx:    ctx,
 	}
 }
 
 func (runner *Runner) PostJob(ctx MotionCtx) error {
 	runner.sem <- struct{}{}
 	defer func() { <-runner.sem }()
-	return process(runner.logger, ctx)
+	return process(runner.ctx, runner.logger, ctx)
 }
 
-func process(logger *slog.Logger, ctx MotionCtx) error {
+func process(runnerCtx context.Context, logger *slog.Logger, ctx MotionCtx) error {
 	parts, err := onMotion(ctx.UUID, ctx.Score, ctx.TimePoint)
 	if err != nil {
 		return err
@@ -42,7 +45,7 @@ func process(logger *slog.Logger, ctx MotionCtx) error {
 
 	outFileName := fmt.Sprintf("motion_%s_%s.mp4", ctx.UUID, ctx.TimePoint.Format("2006-01-02_15-04-05"))
 	logger.Info("File part", "parts", parts.files)
-	if err := concatVideoFiles(outFileName, parts.files); err != nil {
+	if err := concatVideoFiles(runnerCtx, outFileName, parts.files); err != nil {
 		return err
 	}
 	logger.Info("Created new file", "path", outFileName)
@@ -157,7 +160,7 @@ func onMotion(uuid string, score int, motionTime time.Time) (*VideoArtifactParts
 	}
 }
 
-func concatVideoFiles(outputFileName string, fileList []string) error {
+func concatVideoFiles(ctx context.Context, outputFileName string, fileList []string) error {
 	listFileName := fmt.Sprintf("tmp-%s", outputFileName)
 	if err := writeFileList(listFileName, reformatFileList(fileList)); err != nil {
 		return err
@@ -172,7 +175,7 @@ func concatVideoFiles(outputFileName string, fileList []string) error {
 		"-c", "copy", outputFileName,
 	}
 
-	cmd := exec.Command(cmdName, cmdArgs...)
+	cmd := exec.CommandContext(ctx, cmdName, cmdArgs...)
 	//cmd.Stdout = os.Stdout
 	//cmd.Stderr = os.Stderr
 

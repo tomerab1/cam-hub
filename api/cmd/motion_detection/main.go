@@ -66,11 +66,11 @@ func main() {
 	ticker := time.NewTicker(50 * time.Millisecond)
 	defer ticker.Stop()
 
-	runner := motion.NewRunner(8)
 	ctx, cancel := utils.GracefullShutdown(context.Background(), func() {
 		logger.Debug("caught signal, terminating")
 	}, syscall.SIGTERM, syscall.SIGINT)
 	defer cancel()
+	runner := motion.NewRunner(ctx, 8)
 
 	for {
 		select {
