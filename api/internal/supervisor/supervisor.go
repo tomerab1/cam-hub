@@ -8,23 +8,29 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"gopkg.in/lumberjack.v3"
 )
 
 type Supervisor struct {
-	mtx    sync.Mutex
-	procs  map[string]*Proc
-	exitCh chan ExitEvent
-	ctrlCh chan CtrlEvent
-	logger *slog.Logger
+	mtx        sync.Mutex
+	procs      map[string]*Proc
+	exitCh     chan ExitEvent
+	ctrlCh     chan CtrlEvent
+	logger     *slog.Logger
+	loggerSink lumberjack.Writer
 }
 
-func NewSupervisor(maxProcs int) *Supervisor {
+func NewSupervisor(maxProcs int, writer lumberjack.Writer) *Supervisor {
 	return &Supervisor{
 		mtx:    sync.Mutex{},
 		procs:  make(map[string]*Proc),
 		exitCh: make(chan ExitEvent, maxProcs),
 		ctrlCh: make(chan CtrlEvent, maxProcs),
-		logger: slog.New(slog.NewJSONHandler(os.Stdout, nil)),
+		logger: slog.New(slog.NewJSONHandler(writer, &slog.HandlerOptions{
+			Level: slog.LevelDebug,
+		})),
+		loggerSink: writer,
 	}
 }
 
@@ -83,8 +89,8 @@ func (visor *Supervisor) Register(camUUID string, args Args) {
 	}
 
 	cmd := exec.Command("go", args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	cmd.Stdout = visor.loggerSink
+	cmd.Stderr = visor.loggerSink
 
 	err := cmd.Start()
 	if err != nil {
@@ -113,6 +119,7 @@ func (visor *Supervisor) Register(camUUID string, args Args) {
 			status: cmd.ProcessState.ExitCode(),
 			err:    err,
 		}
+		visor.logger.Info("process exit", "pid", cmd.Process.Pid, "status", cmd.ProcessState.ExitCode())
 
 		if visor.findProc(camUUID) == nil {
 			return
@@ -132,11 +139,11 @@ func (visor *Supervisor) Unregister(camUUID string) {
 		visor.logger.Error("unregister: failed to find process", "uuid", camUUID)
 		return
 	}
+	visor.logger.Debug("unregister", "camUUID", camUUID)
 
 	p := proc.cmd.Process
 	err := p.Signal(syscall.SIGTERM)
 	if err != nil {
-		visor.logger.Error("unregister: SIGTERM failed", "err", err)
 		if err := p.Kill(); err != nil {
 			visor.logger.Error("unregister: kill failed", "uuid", camUUID, "err", err)
 		}
@@ -144,20 +151,13 @@ func (visor *Supervisor) Unregister(camUUID string) {
 		go func(p *os.Process) {
 			time.Sleep(5 * time.Second)
 			// Check if the process is still alive, if it is send sigkill
-			if p.Signal(syscall.Signal(0)) == nil {
+			err := p.Signal(syscall.Signal(0))
+			if err == nil {
 				if err := p.Kill(); err != nil {
 					visor.logger.Error("unregister: kill failed", "uuid", camUUID, "err", err)
 				}
 			}
 		}(p)
-	}
-
-	visor.deleteProc(camUUID)
-	visor.exitCh <- ExitEvent{
-		camID:  camUUID,
-		procID: p.Pid,
-		status: -1,
-		err:    err,
 	}
 }
 

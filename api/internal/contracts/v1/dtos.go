@@ -26,6 +26,10 @@ type CameraPairedEvent struct {
 	Revision  int    `json:"revision"`
 }
 
+type CameraUnpairEvent struct {
+	UUID string `json:"uuid"`
+}
+
 type CameraStreamUrl struct {
 	Url string `json:"url"`
 }

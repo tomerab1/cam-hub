@@ -107,5 +107,6 @@ func DiscoverNewCameras(ctx context.Context, logger *slog.Logger) discovery.WsDi
 		logger.Info("discovery canceled/timeout", "err", err)
 	}
 
+	logger.Debug("Found devices", "matches", discovered)
 	return discovered
 }

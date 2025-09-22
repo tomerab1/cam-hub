@@ -2,7 +2,6 @@ package httpserver
 
 import (
 	"log/slog"
-	"os"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -15,7 +14,7 @@ import (
 
 func NewRouter(app *application.Application) *chi.Mux {
 	r := chi.NewRouter()
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+	logger := slog.New(slog.NewJSONHandler(app.LogSink, &slog.HandlerOptions{
 		Level: slog.LevelDebug,
 	}))
 
