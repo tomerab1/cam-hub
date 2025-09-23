@@ -50,6 +50,19 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
+  ovms:
+    image: openvino/model_server:latest
+    ports:
+      - "9000:9000"   # gRPC
+      - "9001:9001"   # REST
+    command: >
+      --model_name person-detection-retail-0013
+      --model_path /models/person-detection-retail-0013
+      --port 9000
+      --rest_port 9001
+    volumes:
+      - ./models/intel/person-detection-retail-0013/FP16:/models/person-detection-retail-0013/1:ro
+    restart: unless-stopped
   
 volumes:
   pgdata:

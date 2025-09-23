@@ -1,2 +1,4 @@
 /recordings/*
 /log/
+/models/
+payload.json
