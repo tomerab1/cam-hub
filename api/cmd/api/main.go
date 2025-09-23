@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"os/signal"
 	"syscall"
 	"time"
 
@@ -15,34 +14,47 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
+	"gopkg.in/lumberjack.v3"
 	"tomerab.com/cam-hub/internal/application"
 	v1 "tomerab.com/cam-hub/internal/contracts/v1"
+	"tomerab.com/cam-hub/internal/events/rabbitmq"
 	"tomerab.com/cam-hub/internal/httpserver"
 	"tomerab.com/cam-hub/internal/mtxapi"
 	"tomerab.com/cam-hub/internal/repos"
 	"tomerab.com/cam-hub/internal/services"
+	"tomerab.com/cam-hub/internal/utils"
 )
 
 func main() {
-	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+	if err := godotenv.Load(); err != nil {
+		panic(err.Error())
+	}
+
+	fileHandler, err := lumberjack.New(
+		lumberjack.WithFileName(os.Getenv("LOGGER_PATH")+"/api.log"),
+		lumberjack.WithMaxBytes(25*lumberjack.MB),
+		lumberjack.WithMaxDays(14),
+		lumberjack.WithCompress(),
+	)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	base := slog.NewJSONHandler(fileHandler, &slog.HandlerOptions{
 		Level: slog.LevelDebug,
-	}))
+	})
 
-	err := godotenv.Load("/home/tomerab/VSCProjects/cam-hub/api/.env")
-	if err != nil {
-		logger.Error(err.Error())
-		os.Exit(1)
-	}
+	appLogger := slog.New(base)
+	redisRepoLogger := slog.New(base).With("repository", "redis")
+	discoveryServiceLogger := slog.New(base).With("service", "discovery")
+	cameraServiceLogger := slog.New(base).With("service", "camera")
+	ptzServiceLogger := slog.New(base).With("service", "ptz")
+	mtxServiceLogger := slog.New(base).With("service", "mtx")
 
+	rootCtx := context.Background()
+	dbpool, err := pgxpool.New(rootCtx, os.Getenv("POSTGRES_DSN"))
 	if err != nil {
-		logger.Error(err.Error())
-		os.Exit(1)
-	}
-
-	dbpool, err := pgxpool.New(context.Background(), os.Getenv("POSTGRES_DSN"))
-	if err != nil {
-		logger.Error(err.Error())
-		os.Exit(1)
+		panic(err.Error())
 	}
 	defer dbpool.Close()
 
@@ -63,15 +75,13 @@ func main() {
 	})
 	defer rdb.Close()
 
-	if err := rdb.Ping(context.Background()).Err(); err != nil {
-		logger.Error("redis ping failed", "err", err)
-		os.Exit(1)
+	if err := rdb.Ping(rootCtx).Err(); err != nil {
+		panic(err.Error())
 	}
 
 	sched, err := gocron.NewScheduler()
 	if err != nil {
-		logger.Error(err.Error())
-		os.Exit(1)
+		panic(err.Error())
 	}
 	defer sched.Shutdown()
 
@@ -82,23 +92,28 @@ func main() {
 	dscSvc := &services.DiscoveryService{
 		Rdb: &repos.RedisRepo{
 			Rdb:    rdb,
-			Logger: logger,
+			Logger: redisRepoLogger,
 		},
 		CamerasRepo: camRepo,
 		Sched:       sched,
-		Logger:      logger,
+		Logger:      discoveryServiceLogger,
 		SseChan:     sseChan,
 	}
-	err = dscSvc.InitJobs(context.Background())
+	err = dscSvc.InitJobs(rootCtx)
 	if err != nil {
-		logger.Error("Failed to init jobs", "err", err.Error())
-		os.Exit(1)
+		panic(err.Error())
 	}
 	dscSvc.Sched.Start()
 
 	credsRepo := repos.NewPgxCameraCredsRepo(dbpool)
+	bus, err := rabbitmq.NewBus(os.Getenv("RABBITMQ_ADDR"))
+	if err != nil {
+		panic(err.Error())
+	}
+
 	app := &application.Application{
-		Logger:           logger,
+		Logger:           appLogger,
+		LogSink:          fileHandler,
 		DB:               dbpool,
 		DiscoveryService: dscSvc,
 		SseChan:          sseChan,
@@ -106,56 +121,50 @@ func main() {
 		CameraService: &services.CameraService{
 			CamRepo:      camRepo,
 			CamCredsRepo: credsRepo,
-			Logger:       logger,
+			Logger:       cameraServiceLogger,
 		},
 		PtzService: &services.PtzService{
 			CamRepo:      camRepo,
 			PtzTokenRepo: ptzRepo,
 			CamCredsRepo: credsRepo,
 			Rdb:          dscSvc.Rdb,
-			Logger:       logger,
+			Logger:       ptzServiceLogger,
 		},
 		MtxClient: &mtxapi.MtxClient{
-			Logger:       logger,
+			Logger:       mtxServiceLogger,
 			CamRepo:      camRepo,
 			CamCredsRepo: credsRepo,
 			HttpClient:   &httpClient,
 		},
+		Bus: bus,
 	}
 
 	srv := http.Server{
 		Addr:    os.Getenv("SERVER_ADDR"),
 		Handler: httpserver.NewRouter(app),
 	}
-
 	shutdownErrChan := make(chan error)
-	go func() {
-		quit := make(chan os.Signal, 1)
-		signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-
-		s := <-quit
-		logger.Info("Caught a signal", "signal", s.String())
-
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	onShutdown := func() {
+		ctx, cancel := context.WithTimeout(rootCtx, 10*time.Second)
 		defer cancel()
 
 		shutdownErrChan <- srv.Shutdown(ctx)
-	}()
+	}
+	_, cancel := utils.GracefullShutdown(rootCtx, onShutdown, syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
 
-	logger.Info(fmt.Sprintf("Server is listening on %s", srv.Addr))
+	appLogger.Info(fmt.Sprintf("Server is listening on %s", srv.Addr))
 	err = srv.ListenAndServe()
 
 	if !errors.Is(err, http.ErrServerClosed) {
-		logger.Error("Error happend while returning for 'ListenAndServer()'", "err", err.Error())
-		os.Exit(1)
+		panic(err.Error())
 	}
 
 	err = <-shutdownErrChan
 	if err != nil {
-		logger.Error("Error happend while returning from 'Shutdown()'", "err", err.Error())
-		os.Exit(1)
+		panic(err.Error())
 	}
 
-	logger.Info("Shutting down the server...")
+	appLogger.Info("Shutting down the server...")
 	os.Exit(0)
 }

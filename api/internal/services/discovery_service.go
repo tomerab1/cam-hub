@@ -31,14 +31,15 @@ type DiscoveryService struct {
 
 func (svc *DiscoveryService) InitJobs(ctx context.Context) error {
 	job, err := svc.Sched.NewJob(
-		gocron.DurationJob(1*time.Minute),
+		gocron.DurationJob(time.Minute),
 		gocron.NewTask(func() {
-			runCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+			runCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 			defer cancel()
 			svc.Logger.Info("Running discovery tick")
 			svc.Discover(runCtx)
 		}),
 		gocron.WithSingletonMode(gocron.LimitModeWait),
+		gocron.JobOption(gocron.WithStartImmediately()),
 	)
 
 	if err != nil {
@@ -50,7 +51,7 @@ func (svc *DiscoveryService) InitJobs(ctx context.Context) error {
 }
 
 func (svc *DiscoveryService) Discover(ctx context.Context) {
-	matches := onvif.DiscoverNewCameras(svc.Logger)
+	matches := onvif.DiscoverNewCameras(ctx, svc.Logger)
 
 	for _, match := range matches.Matches {
 		status := svc.hydrateDb(ctx, match.UUID, match.Xaddr)

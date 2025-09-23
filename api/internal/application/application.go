@@ -6,7 +6,9 @@ import (
 	"net/http"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"gopkg.in/lumberjack.v3"
 	v1 "tomerab.com/cam-hub/internal/contracts/v1"
+	"tomerab.com/cam-hub/internal/events"
 	"tomerab.com/cam-hub/internal/mtxapi"
 	"tomerab.com/cam-hub/internal/services"
 )
@@ -19,7 +21,9 @@ type Application struct {
 	DiscoveryService *services.DiscoveryService
 	PtzService       *services.PtzService
 	MtxClient        *mtxapi.MtxClient
+	Bus              events.BusIface
 	SseChan          chan v1.DiscoveryEvent
+	LogSink          lumberjack.Writer
 }
 
 func (app *Application) WriteJSON(w http.ResponseWriter, r *http.Request, data any, status int) {

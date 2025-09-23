@@ -1,6 +1,7 @@
 package onvif
 
 import (
+	"context"
 	"encoding/xml"
 	"fmt"
 	"log/slog"
@@ -9,32 +10,45 @@ import (
 	"sync"
 
 	wsdiscovery "github.com/IOTechSystems/onvif/ws-discovery"
+	"golang.org/x/sync/errgroup"
 	"tomerab.com/cam-hub/internal/onvif/discovery"
 )
 
-var hostPortRE = regexp.MustCompile("[0-9]+.+[0-9]+:[0-9]+")
-var uuidRE = regexp.MustCompile(`urn:uuid:([0-9a-fA-F-]{36})`)
+var (
+	hostPortRE = regexp.MustCompile("[0-9]+.+[0-9]+:[0-9]+")
+	uuidRE     = regexp.MustCompile(`urn:uuid:([0-9a-fA-F-]{36})`)
+	nvtRE      = regexp.MustCompile(`NetworkVideoTransmitter`)
+)
 
 type wsDiscoveryResp struct {
 	Matches []struct {
 		Match struct {
 			UUID  string `xml:"EndpointReference>Address"`
 			Xaddr string `xml:"XAddrs"`
+			Types string `xml:"Types"`
 		} `xml:"ProbeMatch"`
 	} `xml:"Body>ProbeMatches"`
 }
 
-func DiscoverNewCameras(logger *slog.Logger) discovery.WsDiscoveryDto {
+func DiscoverNewCameras(ctx context.Context, logger *slog.Logger) discovery.WsDiscoveryDto {
 	ifs, _ := net.Interfaces()
 
-	var matchesLk sync.Mutex
-	var wg sync.WaitGroup
-	discovered := discovery.WsDiscoveryDto{Matches: []discovery.WsDiscoveryMatch{}}
+	var (
+		mtx        sync.Mutex
+		discovered = discovery.WsDiscoveryDto{Matches: []discovery.WsDiscoveryMatch{}}
+	)
+	eg, ctx := errgroup.WithContext(ctx)
 
-	for _, i := range ifs {
-		wg.Add(1)
-		go func(name string) {
-			defer wg.Done()
+	for _, iface := range ifs {
+		name := iface.Name
+
+		eg.Go(func() error {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+			}
+
 			responses, err := wsdiscovery.SendProbe(
 				name,
 				nil,
@@ -43,35 +57,56 @@ func DiscoverNewCameras(logger *slog.Logger) discovery.WsDiscoveryDto {
 			)
 
 			if err != nil {
-				logger.Debug(err.Error(), "iface", name)
+				logger.Debug("wsdiscovery probe failed", "iface", name, "err", err)
+				return nil
 			}
 
 			for _, resp := range responses {
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				default:
+				}
+
 				var out wsDiscoveryResp
-				if err = xml.Unmarshal([]byte(resp), &out); err != nil {
-					logger.Error(err.Error())
+				if err := xml.Unmarshal([]byte(resp), &out); err != nil {
+					logger.Error("xml unmarshal failed", "err", err)
 					continue
 				}
 
 				for _, m := range out.Matches {
-					matchesLk.Lock()
-					defer matchesLk.Unlock()
-
-					matches := uuidRE.FindStringSubmatch(m.Match.UUID)
-					if len(matches) < 2 {
-						logger.Warn(fmt.Sprintf("Could not find a submatch for %s", m.Match.UUID))
+					sub := nvtRE.FindStringSubmatch(m.Match.Types)
+					if len(sub) == 0 {
+						logger.Warn(fmt.Sprintf("Could not find submatch for: %s", m.Match.Types))
 						continue
 					}
 
-					discovered.Matches = append(discovered.Matches, discovery.WsDiscoveryMatch{
-						UUID:  uuidRE.FindStringSubmatch(m.Match.UUID)[1],
+					sub = uuidRE.FindStringSubmatch(m.Match.UUID)
+					if len(sub) < 2 {
+						logger.Warn(fmt.Sprintf("Could not find a submatch for: %s", m.Match.UUID))
+						continue
+					}
+
+					match := discovery.WsDiscoveryMatch{
+						UUID:  sub[1],
 						Xaddr: hostPortRE.FindString(m.Match.Xaddr),
-					})
+					}
+
+					mtx.Lock()
+					discovered.Matches = append(discovered.Matches, match)
+					mtx.Unlock()
 				}
 			}
-		}(i.Name)
+
+			return nil
+
+		})
 	}
 
-	wg.Wait()
+	if err := eg.Wait(); err != nil {
+		logger.Info("discovery canceled/timeout", "err", err)
+	}
+
+	logger.Debug("Found devices", "matches", discovered)
 	return discovered
 }
