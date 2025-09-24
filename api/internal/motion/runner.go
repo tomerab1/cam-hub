@@ -2,6 +2,7 @@ package motion
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -9,6 +10,9 @@ import (
 	"path/filepath"
 	"slices"
 	"time"
+
+	v1 "tomerab.com/cam-hub/internal/contracts/v1"
+	"tomerab.com/cam-hub/internal/events"
 )
 
 type MotionCtx struct {
@@ -20,41 +24,51 @@ type MotionCtx struct {
 type Runner struct {
 	logger *slog.Logger
 	ctx    context.Context
+	bus    events.BusIface
 	sem    chan struct{}
 }
 
-func NewRunner(ctx context.Context, maxJobs int) *Runner {
+func NewRunner(ctx context.Context, bus events.BusIface, logger *slog.Logger, maxJobs int) *Runner {
 	return &Runner{
-		logger: slog.New(slog.NewJSONHandler(os.Stdout, nil)),
-		sem:    make(chan struct{}, maxJobs),
+		logger: logger,
 		ctx:    ctx,
+		bus:    bus,
+		sem:    make(chan struct{}, maxJobs),
 	}
 }
 
 func (runner *Runner) PostJob(ctx MotionCtx) error {
 	runner.sem <- struct{}{}
 	defer func() { <-runner.sem }()
-	return process(runner.ctx, runner.logger, ctx)
+	return runner.process(ctx)
 }
 
-func process(runnerCtx context.Context, logger *slog.Logger, ctx MotionCtx) error {
+func (runner *Runner) process(ctx MotionCtx) error {
 	parts, err := onMotion(ctx.UUID, ctx.Score, ctx.TimePoint)
 	if err != nil {
 		return err
 	}
 
 	outFileName := fmt.Sprintf("motion_%s_%s.mp4", ctx.UUID, ctx.TimePoint.Format("2006-01-02_15-04-05"))
-	logger.Info("File part", "parts", parts.files)
-	if err := concatVideoFiles(runnerCtx, outFileName, parts.files); err != nil {
+	runner.logger.Info("File part", "parts", parts.files)
+	if err := concatVideoFiles(runner.ctx, outFileName, parts.files); err != nil {
 		return err
 	}
-	logger.Info("Created new file", "path", outFileName)
+	runner.logger.Info("Created new file", "path", outFileName)
+
+	// TODO(tomer): Use ffmpeg to extract several pictures from the motion file (should be at index 1)
 
 	// TODO(tomer): Write to minio
 
-	// TODO(tomer): Write to rabbitmq
+	bytes, err := json.Marshal(v1.AnalyzeImgsEvent{
+		UUID:  ctx.UUID,
+		Paths: parts.files,
+	})
+	if err != nil {
+		return err
+	}
 
-	return nil
+	return runner.bus.Publish(runner.ctx, "", "", bytes, nil)
 }
 
 func getFileNames(entires []os.DirEntry) []string {

@@ -13,6 +13,7 @@ import (
 	"github.com/joho/godotenv"
 	"gocv.io/x/gocv"
 	"gopkg.in/lumberjack.v3"
+	"tomerab.com/cam-hub/internal/events/rabbitmq"
 	"tomerab.com/cam-hub/internal/motion"
 	"tomerab.com/cam-hub/internal/utils"
 )
@@ -70,7 +71,17 @@ func main() {
 		logger.Debug("caught signal, terminating")
 	}, syscall.SIGTERM, syscall.SIGINT)
 	defer cancel()
-	runner := motion.NewRunner(ctx, 8)
+
+	bus, err := rabbitmq.NewBus(os.Getenv("RABBITMQ_ADDR"))
+	if err != nil {
+		panic(err.Error())
+	}
+
+	if err := bus.DeclareQueue("motion.analyze", true, nil); err != nil {
+		panic(err.Error())
+	}
+
+	runner := motion.NewRunner(ctx, bus, logger, 8)
 
 	for {
 		select {

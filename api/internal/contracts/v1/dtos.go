@@ -26,6 +26,11 @@ type CameraPairedEvent struct {
 	Revision  int    `json:"revision"`
 }
 
+type AnalyzeImgsEvent struct {
+	UUID  string   `json:"uuid"`
+	Paths []string `json:"paths"`
+}
+
 type CameraUnpairEvent struct {
 	UUID string `json:"uuid"`
 }

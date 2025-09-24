@@ -2,11 +2,15 @@ package frameanalyzer
 
 import (
 	"context"
+	"encoding/json"
+	"log/slog"
 	"os"
 	"syscall"
 
 	"github.com/joho/godotenv"
 	"gopkg.in/lumberjack.v3"
+	v1 "tomerab.com/cam-hub/internal/contracts/v1"
+	"tomerab.com/cam-hub/internal/events"
 	"tomerab.com/cam-hub/internal/events/rabbitmq"
 	frameanalyzer "tomerab.com/cam-hub/internal/frame_analyzer"
 	"tomerab.com/cam-hub/internal/utils"
@@ -26,15 +30,34 @@ func main() {
 	if err != nil {
 		panic(err.Error())
 	}
+	logger := slog.New(slog.NewJSONHandler(fileHandler, &slog.HandlerOptions{Level: slog.LevelDebug}))
 
 	bus, err := rabbitmq.NewBus(os.Getenv("RABBITMQ_ADDR"))
 	if err != nil {
 		panic(err.Error())
 	}
 
+	if err := bus.DeclareQueue("motion.analyze", true, nil); err != nil {
+		panic(err.Error())
+	}
+
 	ctx, cancel := utils.GracefullShutdown(context.Background(), func() {}, syscall.SIGTERM, syscall.SIGINT)
 	defer cancel()
+	analyzer := frameanalyzer.New(logger, bus)
 
-	analyzer := frameanalyzer.New(fileHandler, bus)
+	bus.Consume(ctx, "motion.analyze", "", func(ctx context.Context, m events.Message) events.AckAction {
+		var msg v1.AnalyzeImgsEvent
+		if err := json.Unmarshal(m.Body, &msg); err != nil {
+			logger.Error("consume: failed to parse json", "err", err.Error())
+			return events.NackDiscard
+		}
+
+		analyzer.NotifyCtrl(frameanalyzer.AnalyzeImgsEvent{
+			UUID:  msg.UUID,
+			Paths: msg.Paths,
+		})
+		return events.Ack
+	})
+
 	analyzer.Run(ctx)
 }

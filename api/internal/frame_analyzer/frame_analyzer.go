@@ -2,22 +2,27 @@ package frameanalyzer
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 
-	"gopkg.in/lumberjack.v3"
 	"tomerab.com/cam-hub/internal/events"
 )
 
+const (
+	maxConcurrentAnalysis = 16
+)
+
 type FrameAnalyzer struct {
-	logger *slog.Logger
-	bus    events.BusIface
+	logger        *slog.Logger
+	bus           events.BusIface
+	imgAnalysisCh chan AnalyzeImgsEvent
 }
 
-func New(loggerSink lumberjack.Writer, bus events.BusIface) *FrameAnalyzer {
-	logger := slog.New(slog.NewJSONHandler(loggerSink, &slog.HandlerOptions{Level: slog.LevelDebug}))
+func New(logger *slog.Logger, bus events.BusIface) *FrameAnalyzer {
 	return &FrameAnalyzer{
-		logger: logger,
-		bus:    bus,
+		logger:        logger,
+		bus:           bus,
+		imgAnalysisCh: make(chan AnalyzeImgsEvent, maxConcurrentAnalysis),
 	}
 }
 
@@ -26,7 +31,12 @@ func (analyzer *FrameAnalyzer) Run(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-
+		case ev := <-analyzer.imgAnalysisCh:
+			analyzer.logger.Info(fmt.Sprintf("%+v\n", ev))
 		}
 	}
+}
+
+func (analyzer *FrameAnalyzer) NotifyCtrl(ev AnalyzeImgsEvent) {
+	analyzer.imgAnalysisCh <- ev
 }

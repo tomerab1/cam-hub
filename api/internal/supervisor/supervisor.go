@@ -13,12 +13,11 @@ import (
 )
 
 type Supervisor struct {
-	mtx        sync.Mutex
-	procs      map[string]*Proc
-	exitCh     chan ExitEvent
-	ctrlCh     chan CtrlEvent
-	logger     *slog.Logger
-	loggerSink lumberjack.Writer
+	mtx    sync.Mutex
+	procs  map[string]*Proc
+	exitCh chan ExitEvent
+	ctrlCh chan CtrlEvent
+	logger *slog.Logger
 }
 
 func NewSupervisor(maxProcs int, writer lumberjack.Writer) *Supervisor {
@@ -30,7 +29,6 @@ func NewSupervisor(maxProcs int, writer lumberjack.Writer) *Supervisor {
 		logger: slog.New(slog.NewJSONHandler(writer, &slog.HandlerOptions{
 			Level: slog.LevelDebug,
 		})),
-		loggerSink: writer,
 	}
 }
 
@@ -90,8 +88,6 @@ func (visor *Supervisor) Register(camUUID string, args Args) {
 
 	cmd := exec.Command("go", args...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	cmd.Stdout = visor.loggerSink
-	cmd.Stderr = visor.loggerSink
 
 	err := cmd.Start()
 	if err != nil {
