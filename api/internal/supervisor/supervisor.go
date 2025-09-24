@@ -120,7 +120,6 @@ func (visor *Supervisor) Register(camUUID string, args Args) {
 			status: cmd.ProcessState.ExitCode(),
 			err:    err,
 		}
-		visor.logger.Info("process exit", "pid", cmd.Process.Pid, "status", cmd.ProcessState.ExitCode())
 
 		if visor.findProc(camUUID) == nil {
 			return
