@@ -63,8 +63,20 @@ services:
     volumes:
       - ./models/intel/person-detection-retail-0013/FP16:/models/person-detection-retail-0013/1:ro
     restart: unless-stopped
-  
+  minio:
+    image: minio/minio:latest
+    env_file:
+      - ./api/.env
+    volumes:
+      - minio:/data
+    ports:
+      - "9002:9000"
+      - "9003:9001"
+    command: server /data --console-address ":9001"
+    restart: unless-stopped
+
 volumes:
   pgdata:
   redisdata:
   rabbitmqdata:
+  minio:

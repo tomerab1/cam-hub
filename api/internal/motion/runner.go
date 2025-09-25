@@ -1,6 +1,7 @@
 package motion
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -11,8 +12,10 @@ import (
 	"slices"
 	"time"
 
+	"golang.org/x/sync/errgroup"
 	v1 "tomerab.com/cam-hub/internal/contracts/v1"
 	"tomerab.com/cam-hub/internal/events"
+	objectstorage "tomerab.com/cam-hub/internal/object_storage"
 )
 
 type MotionCtx struct {
@@ -22,18 +25,21 @@ type MotionCtx struct {
 }
 
 type Runner struct {
-	logger *slog.Logger
-	ctx    context.Context
-	bus    events.BusIface
-	sem    chan struct{}
+	logger      *slog.Logger
+	ctx         context.Context
+	bus         events.BusIface
+	minioClient *objectstorage.MinIOStore
+	sem         chan struct{}
 }
 
-func NewRunner(ctx context.Context, bus events.BusIface, logger *slog.Logger, maxJobs int) *Runner {
+func NewRunner(ctx context.Context, minioClient *objectstorage.MinIOStore, bus events.BusIface, logger *slog.Logger, maxJobs int) *Runner {
+	logger.Info("new runner created")
 	return &Runner{
-		logger: logger,
-		ctx:    ctx,
-		bus:    bus,
-		sem:    make(chan struct{}, maxJobs),
+		logger:      logger,
+		ctx:         ctx,
+		bus:         bus,
+		minioClient: minioClient,
+		sem:         make(chan struct{}, maxJobs),
 	}
 }
 
@@ -51,24 +57,146 @@ func (runner *Runner) process(ctx MotionCtx) error {
 
 	outFileName := fmt.Sprintf("motion_%s_%s.mp4", ctx.UUID, ctx.TimePoint.Format("2006-01-02_15-04-05"))
 	runner.logger.Info("File part", "parts", parts.files)
-	if err := concatVideoFiles(runner.ctx, outFileName, parts.files); err != nil {
+	if err := concatVideoFiles(runner.ctx, runner.logger, outFileName, parts.files); err != nil {
 		return err
 	}
 	runner.logger.Info("Created new file", "path", outFileName)
 
-	// TODO(tomer): Use ffmpeg to extract several pictures from the motion file (should be at index 1)
+	framePaths, err := extractFrames(runner.ctx, runner.logger, ctx, parts.files[1])
+	if err != nil {
+		return err
+	}
 
-	// TODO(tomer): Write to minio
+	if err := runner.uploadVideoToStore(outFileName); err != nil {
+		runner.logger.Error("failed to upload video to store", "err", err.Error())
+		return err
+	}
+	if err := runner.uploadFramesToStore(framePaths); err != nil {
+		runner.logger.Error("failed to upload frames to store", "err", err.Error())
+		return err
+	}
+
+	toRm := []string{}
+	toRm = append(toRm, framePaths...)
+	if err := runner.deletePaths(append(toRm, outFileName)); err != nil {
+		return err
+	}
 
 	bytes, err := json.Marshal(v1.AnalyzeImgsEvent{
 		UUID:  ctx.UUID,
-		Paths: parts.files,
+		Paths: framePaths, // TODO(tomer): Change it to be the ffmpeg extracted frames
 	})
 	if err != nil {
 		return err
 	}
 
-	return runner.bus.Publish(runner.ctx, "", "", bytes, nil)
+	return runner.bus.Publish(runner.ctx, "", "motion.analyze", bytes, nil)
+}
+
+func (runner *Runner) deletePaths(paths []string) error {
+	var eg errgroup.Group
+
+	for _, path := range paths {
+		p := path // capture for lambda
+
+		eg.Go(func() error {
+			return os.Remove(p)
+		})
+	}
+
+	return eg.Wait()
+}
+
+func (runner *Runner) uploadVideoToStore(path string) error {
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	fileStat, err := file.Stat()
+	if err != nil {
+		return err
+	}
+
+	info, err := runner.minioClient.PutObject("test1", file.Name(), file, fileStat.Size(), time.Now().Add(time.Minute))
+	if err != nil {
+		return err
+	}
+
+	runner.logger.Info("object info", "info", info)
+	return nil
+}
+
+func (runner *Runner) uploadFramesToStore(paths []string) error {
+	var eg errgroup.Group
+
+	for _, path := range paths {
+		p := path // capture for lambda
+
+		eg.Go(func() error {
+			file, err := os.Open(p)
+			if err != nil {
+				return err
+			}
+			defer file.Close()
+
+			fileStat, err := file.Stat()
+			if err != nil {
+				return err
+			}
+
+			info, err := runner.minioClient.PutObject("test1", file.Name(), file, fileStat.Size(), time.Now().Add(time.Minute))
+			if err != nil {
+				return err
+			}
+
+			runner.logger.Info("object info", "info", info)
+			return nil
+		})
+	}
+
+	return eg.Wait()
+}
+
+// extractFrames runs ffmpeg to extract up to 4 PNG frames at 10fps from
+// the given motionVideoPath. The output files are named with the motion
+// event UUID and timestamp, e.g. "motion_frame_<uuid>_<time>_0001.png".
+//
+// It returns the full list of expected output paths. If ffmpeg fails, an
+// error is returned and details are logged with the provided logger.
+//
+// ctx is used to cancel the ffmpeg process early.
+func extractFrames(ctx context.Context, logger *slog.Logger, motionCtx MotionCtx, motionVideoPath string) ([]string, error) {
+	outFileName := fmt.Sprintf("motion_frame_%s_%s_%%04d.png", motionCtx.UUID, motionCtx.TimePoint.Format("2006-01-02_15-04-05"))
+	args := []string{
+		"-i", motionVideoPath,
+		"-r", "1",
+		"-vframes", "4",
+		outFileName,
+	}
+
+	cmd := exec.CommandContext(ctx, "ffmpeg", args...)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		logger.Error(
+			"ffmpeg failed",
+			"motion_uuid", motionCtx.UUID,
+			"timepoint", motionCtx.TimePoint,
+			"stderr", stderr.String(),
+			"error", err.Error(),
+		)
+		return nil, fmt.Errorf("ffmpeg failed: %w", err)
+	}
+
+	paths := make([]string, 0, 4)
+	for i := 1; i <= cap(paths); i++ {
+		paths = append(paths, fmt.Sprintf("motion_frame_%s_%s_%04d.png", motionCtx.UUID, motionCtx.TimePoint.Format("2006-01-02_15-04-05"), i))
+	}
+
+	return paths, nil
 }
 
 func getFileNames(entires []os.DirEntry) []string {
@@ -116,6 +244,7 @@ func getFileList(camID string, motionTime time.Time) ([]string, error) {
 		return out, nil
 	}
 
+	idx -= 1 // binarySearch returns the index it would appear in
 	if idx-1 >= 0 {
 		out = append(out, filepath.Join(dir, names[idx-1]))
 	}
@@ -165,7 +294,7 @@ func onMotion(uuid string, score int, motionTime time.Time) (*VideoArtifactParts
 				return nil, err
 			}
 			if len(fileList) > 2 {
-				if err := waitForFiles(fileList[len(fileList)-1], 2*time.Second); err != nil {
+				if err := waitForFiles(fileList[len(fileList)-1], 5*time.Second); err != nil {
 					return nil, err
 				}
 				return &VideoArtifactParts{score: score, files: fileList}, nil
@@ -174,7 +303,7 @@ func onMotion(uuid string, score int, motionTime time.Time) (*VideoArtifactParts
 	}
 }
 
-func concatVideoFiles(ctx context.Context, outputFileName string, fileList []string) error {
+func concatVideoFiles(ctx context.Context, logger *slog.Logger, outputFileName string, fileList []string) error {
 	listFileName := fmt.Sprintf("tmp-%s", outputFileName)
 	if err := writeFileList(listFileName, reformatFileList(fileList)); err != nil {
 		return err
@@ -190,12 +319,17 @@ func concatVideoFiles(ctx context.Context, outputFileName string, fileList []str
 	}
 
 	cmd := exec.CommandContext(ctx, cmdName, cmdArgs...)
-	//cmd.Stdout = os.Stdout
-	//cmd.Stderr = os.Stderr
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
 
-	err := cmd.Run()
-	if err != nil {
-		return err
+	if err := cmd.Run(); err != nil {
+		logger.Error(
+			"ffmpeg failed",
+			"fileList", fileList,
+			"stderr", stderr.String(),
+			"error", err.Error(),
+		)
+		return fmt.Errorf("ffmpeg failed: %w", err)
 	}
 
 	return nil

@@ -15,6 +15,7 @@ import (
 	"gopkg.in/lumberjack.v3"
 	"tomerab.com/cam-hub/internal/events/rabbitmq"
 	"tomerab.com/cam-hub/internal/motion"
+	objectstorage "tomerab.com/cam-hub/internal/object_storage"
 	"tomerab.com/cam-hub/internal/utils"
 )
 
@@ -81,7 +82,25 @@ func main() {
 		panic(err.Error())
 	}
 
-	runner := motion.NewRunner(ctx, bus, logger, 8)
+	minioLogger := slog.New(logger.Handler()).With("component", "MinIO")
+	minioClient, err := objectstorage.NewMinIOStore(ctx, minioLogger, false)
+	if err != nil {
+		logger.Error("failed to create MinIO client", "err", err.Error())
+		panic(err.Error())
+	}
+
+	if exists, err := minioClient.BucketExists("test1"); !exists {
+		if err != nil {
+			minioLogger.Error("bucket exists check failed", "err", err.Error())
+		}
+
+		if err := minioClient.CreateBucket("test1"); err != nil {
+			minioLogger.Error("bucket creation failed", "err", err.Error())
+			panic(err.Error())
+		}
+	}
+
+	runner := motion.NewRunner(ctx, minioClient, bus, logger, 8)
 
 	for {
 		select {
@@ -94,6 +113,7 @@ func main() {
 
 			isMotion, score := det.Detect(&frame)
 			if isMotion && time.Since(lastMotionEvent) > motionCoolDown {
+				logger.Info("motion detected posting new job")
 				lastMotionEvent = time.Now()
 				go runner.PostJob(motion.MotionCtx{
 					UUID:      cameraUUID,
