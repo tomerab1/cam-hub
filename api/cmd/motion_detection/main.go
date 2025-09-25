@@ -113,8 +113,8 @@ func main() {
 
 			isMotion, score := det.Detect(&frame)
 			if isMotion && time.Since(lastMotionEvent) > motionCoolDown {
-				logger.Info("motion detected posting new job")
-				lastMotionEvent = time.Now()
+				lastMotionEvent = time.Now().UTC()
+				logger.Info("motion detected posting new job", "motion_time", lastMotionEvent)
 				go runner.PostJob(motion.MotionCtx{
 					UUID:      cameraUUID,
 					Score:     score,

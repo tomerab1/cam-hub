@@ -244,7 +244,6 @@ func getFileList(camID string, motionTime time.Time) ([]string, error) {
 		return out, nil
 	}
 
-	idx -= 1 // binarySearch returns the index it would appear in
 	if idx-1 >= 0 {
 		out = append(out, filepath.Join(dir, names[idx-1]))
 	}
