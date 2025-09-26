@@ -22,6 +22,7 @@ import (
 var (
 	lastMotionEvent time.Time
 	motionCoolDown  = 10 * time.Second
+	bucketName      = os.Getenv("MINIO_BUCKET_NAME")
 )
 
 func main() {
@@ -89,19 +90,18 @@ func main() {
 		panic(err.Error())
 	}
 
-	if exists, err := minioClient.BucketExists("test1"); !exists {
+	if exists, err := minioClient.BucketExists(bucketName); !exists {
 		if err != nil {
 			minioLogger.Error("bucket exists check failed", "err", err.Error())
 		}
 
-		if err := minioClient.CreateBucket("test1"); err != nil {
+		if err := minioClient.CreateBucket(bucketName); err != nil {
 			minioLogger.Error("bucket creation failed", "err", err.Error())
 			panic(err.Error())
 		}
 	}
 
 	runner := motion.NewRunner(ctx, minioClient, bus, logger, 8)
-
 	for {
 		select {
 		case <-ctx.Done():

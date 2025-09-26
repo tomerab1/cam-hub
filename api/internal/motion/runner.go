@@ -18,6 +18,10 @@ import (
 	objectstorage "tomerab.com/cam-hub/internal/object_storage"
 )
 
+var (
+	bucketName = os.Getenv("MINIO_BUCKET_NAME")
+)
+
 type MotionCtx struct {
 	UUID      string
 	Score     int
@@ -67,11 +71,12 @@ func (runner *Runner) process(ctx MotionCtx) error {
 		return err
 	}
 
-	if err := runner.uploadVideoToStore(outFileName); err != nil {
+	objPath := ctx.UUID + "/" + ctx.TimePoint.UTC().Format("2006-01-02_15-04-05")
+	if err := runner.uploadVideoToStore(bucketName, objPath, outFileName); err != nil {
 		runner.logger.Error("failed to upload video to store", "err", err.Error())
 		return err
 	}
-	if err := runner.uploadFramesToStore(framePaths); err != nil {
+	if err := runner.uploadFramesToStore(bucketName, objPath, framePaths); err != nil {
 		runner.logger.Error("failed to upload frames to store", "err", err.Error())
 		return err
 	}
@@ -107,7 +112,7 @@ func (runner *Runner) deletePaths(paths []string) error {
 	return eg.Wait()
 }
 
-func (runner *Runner) uploadVideoToStore(path string) error {
+func (runner *Runner) uploadVideoToStore(bucketName, objPath, path string) error {
 	file, err := os.Open(path)
 	if err != nil {
 		return err
@@ -119,16 +124,15 @@ func (runner *Runner) uploadVideoToStore(path string) error {
 		return err
 	}
 
-	info, err := runner.minioClient.PutObject("test1", file.Name(), file, fileStat.Size(), time.Now().Add(time.Minute))
+	_, err = runner.minioClient.PutObject(bucketName, objPath+"/"+file.Name(), file, fileStat.Size(), time.Now().Add(time.Minute))
 	if err != nil {
 		return err
 	}
 
-	runner.logger.Info("object info", "info", info)
 	return nil
 }
 
-func (runner *Runner) uploadFramesToStore(paths []string) error {
+func (runner *Runner) uploadFramesToStore(bucketName, objPath string, paths []string) error {
 	var eg errgroup.Group
 
 	for _, path := range paths {
@@ -146,12 +150,11 @@ func (runner *Runner) uploadFramesToStore(paths []string) error {
 				return err
 			}
 
-			info, err := runner.minioClient.PutObject("test1", file.Name(), file, fileStat.Size(), time.Now().Add(time.Minute))
+			_, err = runner.minioClient.PutObject(bucketName, objPath+"/"+file.Name(), file, fileStat.Size(), time.Now().Add(time.Minute))
 			if err != nil {
 				return err
 			}
 
-			runner.logger.Info("object info", "info", info)
 			return nil
 		})
 	}
