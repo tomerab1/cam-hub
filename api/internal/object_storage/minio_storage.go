@@ -12,6 +12,13 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
+type ContentType = string
+
+const (
+	UrlVideo ContentType = "video/mp4"
+	UrlPng               = "image/png"
+)
+
 type MinIOStore struct {
 	client *minio.Client
 	logger *slog.Logger
@@ -71,9 +78,13 @@ func (store *MinIOStore) PutObject(bucketName, objName string, reader io.Reader,
 	)
 }
 
-func (store *MinIOStore) PresignedViewUrl(bucketName, objName string, expiry time.Duration) (string, error) {
+func (store *MinIOStore) GetObject(bucketName, objectName string) (*minio.Object, error) {
+	return store.client.GetObject(store.ctx, bucketName, objectName, minio.GetObjectOptions{})
+}
+
+func (store *MinIOStore) PresignedViewUrl(bucketName, objName string, contentType ContentType, expiry time.Duration) (string, error) {
 	urlVals := make(url.Values)
-	urlVals.Set("response-content-type", "video/mp4")
+	urlVals.Set("response-content-type", contentType)
 	urlVals.Set("response-content-disposition", `inline; filename="`+objName+`"`)
 
 	url, err := store.client.PresignedGetObject(store.ctx, bucketName, objName, expiry, urlVals)

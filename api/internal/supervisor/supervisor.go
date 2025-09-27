@@ -1,6 +1,7 @@
 package supervisor
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
@@ -8,8 +9,6 @@ import (
 	"sync"
 	"syscall"
 	"time"
-
-	"gopkg.in/lumberjack.v3"
 )
 
 type Supervisor struct {
@@ -20,21 +19,21 @@ type Supervisor struct {
 	logger *slog.Logger
 }
 
-func NewSupervisor(maxProcs int, writer lumberjack.Writer) *Supervisor {
+func NewSupervisor(maxProcs int, logger *slog.Logger) *Supervisor {
 	return &Supervisor{
 		mtx:    sync.Mutex{},
 		procs:  make(map[string]*Proc),
 		exitCh: make(chan ExitEvent, maxProcs),
 		ctrlCh: make(chan CtrlEvent, maxProcs),
-		logger: slog.New(slog.NewJSONHandler(writer, &slog.HandlerOptions{
-			Level: slog.LevelDebug,
-		})),
+		logger: logger,
 	}
 }
 
-func (visor *Supervisor) Run() {
+func (visor *Supervisor) Run(ctx context.Context) {
 	for {
 		select {
+		case <-ctx.Done():
+			return
 		case exit := <-visor.exitCh:
 			visor.logger.Info("Process exit",
 				"cam", exit.camID,
@@ -67,10 +66,6 @@ func (visor *Supervisor) GetCameraRevision(camUUID string) (int, error) {
 
 func (visor *Supervisor) Shutdown() {
 	visor.logger.Info("Shutting down")
-	visor.ctrlCh <- CtrlEvent{
-		Kind: CtrlShutdown,
-	}
-
 	for uuid := range visor.procs {
 		visor.Unregister(uuid)
 	}

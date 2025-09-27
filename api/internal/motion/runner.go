@@ -16,6 +16,7 @@ import (
 	v1 "tomerab.com/cam-hub/internal/contracts/v1"
 	"tomerab.com/cam-hub/internal/events"
 	objectstorage "tomerab.com/cam-hub/internal/object_storage"
+	"tomerab.com/cam-hub/internal/utils"
 )
 
 var (
@@ -88,8 +89,10 @@ func (runner *Runner) process(ctx MotionCtx) error {
 	}
 
 	bytes, err := json.Marshal(v1.AnalyzeImgsEvent{
-		UUID:  ctx.UUID,
-		Paths: framePaths, // TODO(tomer): Change it to be the ffmpeg extracted frames
+		UUID: ctx.UUID,
+		Paths: utils.Map(framePaths, func(p string) string {
+			return objPath + "/" + p
+		}),
 	})
 	if err != nil {
 		return err
@@ -173,8 +176,10 @@ func (runner *Runner) uploadFramesToStore(bucketName, objPath string, paths []st
 func extractFrames(ctx context.Context, logger *slog.Logger, motionCtx MotionCtx, motionVideoPath string) ([]string, error) {
 	outFileName := fmt.Sprintf("motion_frame_%s_%s_%%04d.png", motionCtx.UUID, motionCtx.TimePoint.Format("2006-01-02_15-04-05"))
 	args := []string{
+		"-hide_banner", "-nostdin", "-y",
 		"-i", motionVideoPath,
-		"-r", "1",
+		// Scale the video so it will complie with ovms retail model input
+		"-vf", "fps=1,scale=544:320:flags=bicubic",
 		"-vframes", "4",
 		outFileName,
 	}

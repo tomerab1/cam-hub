@@ -1,4 +1,4 @@
-package frameanalyzer
+package main
 
 import (
 	"context"
@@ -13,6 +13,7 @@ import (
 	"tomerab.com/cam-hub/internal/events"
 	"tomerab.com/cam-hub/internal/events/rabbitmq"
 	frameanalyzer "tomerab.com/cam-hub/internal/frame_analyzer"
+	objectstorage "tomerab.com/cam-hub/internal/object_storage"
 	"tomerab.com/cam-hub/internal/utils"
 )
 
@@ -43,7 +44,13 @@ func main() {
 
 	ctx, cancel := utils.GracefullShutdown(context.Background(), func() {}, syscall.SIGTERM, syscall.SIGINT)
 	defer cancel()
-	analyzer := frameanalyzer.New(logger, bus)
+
+	minioClient, err := objectstorage.NewMinIOStore(ctx, logger, false)
+	if err != nil {
+		logger.Error("failed to create MinIO client", "err", err.Error())
+		panic(err.Error())
+	}
+	analyzer := frameanalyzer.New(ctx, logger, bus, minioClient)
 
 	bus.Consume(ctx, "motion.analyze", "", func(ctx context.Context, m events.Message) events.AckAction {
 		var msg v1.AnalyzeImgsEvent

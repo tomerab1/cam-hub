@@ -68,6 +68,15 @@ func FindFirstIdx[T any](elems []T, pred func(idx int, elem T) bool) (int, error
 	return -1, ErrNoFound
 }
 
+func Map[T, U any](s []T, f func(T) U) []U {
+	result := make([]U, len(s))
+	for i, v := range s {
+		result[i] = f(v)
+	}
+
+	return result
+}
+
 func GracefullShutdown(ctx context.Context, onShutdown func(), sigs ...os.Signal) (context.Context, context.CancelFunc) {
 	ctx, cancel := context.WithCancel(ctx)
 	c := make(chan os.Signal, 1)
