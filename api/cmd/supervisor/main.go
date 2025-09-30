@@ -89,7 +89,7 @@ func main() {
 	})
 
 	bus.Consume(ctx, "supervisor.unpair", "supervisor", func(ctx context.Context, m events.Message) events.AckAction {
-		var ev v1.CameraUnpairEvent
+		var ev v1.CameraUnpairedEvent
 		if err := json.Unmarshal(m.Body, &ev); err != nil {
 			logger.Warn("supervisor.upair faield to parse message", "err", err.Error())
 			return events.NackRequeue

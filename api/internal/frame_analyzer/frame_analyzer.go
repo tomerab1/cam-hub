@@ -144,20 +144,20 @@ func (analyzer *FrameAnalyzer) onAnalyze(ev *AnalyzeImgsEvent) error {
 			},
 		},
 		Inputs: map[string]*framework.TensorProto{
-			INPUT_NAME: &framework.TensorProto{
+			INPUT_NAME: {
 				Dtype: framework.DataType_DT_FLOAT,
 				TensorShape: &framework.TensorShapeProto{
 					Dim: []*framework.TensorShapeProto_Dim{
-						&framework.TensorShapeProto_Dim{
+						{
 							Size: tensorN,
 						},
-						&framework.TensorShapeProto_Dim{
+						{
 							Size: tensorC,
 						},
-						&framework.TensorShapeProto_Dim{
+						{
 							Size: tensorH,
 						},
-						&framework.TensorShapeProto_Dim{
+						{
 							Size: tensorW,
 						},
 					},
@@ -185,6 +185,8 @@ func (analyzer *FrameAnalyzer) onAnalyze(ev *AnalyzeImgsEvent) error {
 	}
 	responseContent := respProto.GetTensorContent()
 	outputShape := respProto.GetTensorShape()
+	// shape should be [4, 1, 200, 7]
+	// 4 - batch size, 1 - class (person or not), 200 - max number of detections per image, 7 - detection info
 	dims := outputShape.GetDim()
 
 	maxDetections := int(dims[2].GetSize())
@@ -196,15 +198,13 @@ func (analyzer *FrameAnalyzer) onAnalyze(ev *AnalyzeImgsEvent) error {
 	}
 	defer outMat.Close()
 
-	detectionCount := 0
 	for row := 0; row < outMat.Rows(); row++ {
 		confidence := outMat.GetFloatAt(row, 2)
 		if confidence > 0.5 {
-			detectionCount++
+			analyzer.logger.Info("detections found", "paths", ev.Paths)
+			return nil
 		}
 	}
-
-	analyzer.logger.Info("detections found", "count", detectionCount)
 
 	return nil
 }

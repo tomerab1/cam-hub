@@ -31,7 +31,7 @@ type AnalyzeImgsEvent struct {
 	Paths []string `json:"paths"`
 }
 
-type CameraUnpairEvent struct {
+type CameraUnpairedEvent struct {
 	UUID string `json:"uuid"`
 }
 
