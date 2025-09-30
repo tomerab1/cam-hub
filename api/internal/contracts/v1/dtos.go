@@ -43,3 +43,22 @@ type MoveCameraReq struct {
 	Translation *utils.Vec2D `json:"translation"`
 	Zoom        *float32     `json:"zoom"`
 }
+
+type AddRecordingReq struct {
+	BucketName         string `json:"bucket_name"`
+	VidBucketKey       string `json:"vid_key"`
+	BestFrameBucketKey string `json:"best_frame_key"`
+	Evidence           struct {
+		Conf float32 `json:"conf"`
+		Xmin float32 `json:"x_min"`
+		Ymin float32 `json:"y_min"`
+		Xmax float32 `json:"x_max"`
+		Ymax float32 `json:"y_max"`
+	} `json:"evidence"`
+	Score float32 `json:"score"`
+
+	RetentionDays int `json:"retention_days"`
+
+	StartTs time.Time `json:"start_ts"`
+	EndTs   time.Time `json:"end_ts"`
+}

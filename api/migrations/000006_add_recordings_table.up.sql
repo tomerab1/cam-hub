@@ -1,5 +1,7 @@
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
 CREATE TABLE IF NOT EXISTS recordings (
-    id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     cam_id UUID NOT NULL REFERENCES cameras(id) ON DELETE CASCADE,
     bucket_name TEXT NOT NULL,
     vid_key TEXT NOT NULL UNIQUE,

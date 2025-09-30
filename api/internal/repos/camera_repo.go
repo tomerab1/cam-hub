@@ -35,11 +35,6 @@ func (repo *PgxCameraRepo) Begin(ctx context.Context) (pgx.Tx, error) {
 }
 
 func (repo *PgxCameraRepo) UpsertCameraTx(ctx context.Context, tx pgx.Tx, cam *models.Camera) error {
-	// TODO(tomer): Remove this, better to fail fast
-	// if cam == nil {
-	// 	return fmt.Errorf("invalid argument: camera is null")
-	// }
-
 	_, err := tx.Exec(ctx, `
 		INSERT INTO cameras (
 			id, name, manufacturer, model, firmwareVersion, serialNumber, hardwareId, addr, isPaired

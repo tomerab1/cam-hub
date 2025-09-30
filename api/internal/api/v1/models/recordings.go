@@ -16,21 +16,21 @@ type Evidence struct {
 }
 
 type Recordings struct {
-	Id                 string   `db:"id"`
-	CamUUID            string   `db:"cam_id"`
-	BucketName         string   `db:"bucket_name"`
-	VidBucketKey       string   `db:"vid_key"`
-	BestFrameBucketKey string   `db:"best_frame_key"`
-	Evidence           Evidence `db:"evidence"`
-	Score              float32  `db:"score"`
-	State              string   `db:"state"`
-	NeedsPublish       bool     `db:"needs_publish"`
+	Id                 string   `json:"id" db:"id"`
+	CamUUID            string   `json:"cam_id" db:"cam_id"`
+	BucketName         string   `json:"bucket_name" db:"bucket_name"`
+	VidBucketKey       string   `json:"vid_key" db:"vid_key"`
+	BestFrameBucketKey string   `json:"best_frame_key" db:"best_frame_key"`
+	Evidence           Evidence `json:"evidence" db:"evidence"`
+	Score              float32  `json:"score" db:"score"`
+	State              string   `json:"state" db:"state"`
+	NeedsPublish       bool     `json:"needs_publish" db:"needs_publish"`
 
-	PromotedAt    time.Time `db:"promoted_at"`
-	RetentionDays int       `db:"retention_days"`
+	PromotedAt    time.Time `json:"promoted_at" db:"promoted_at"`
+	RetentionDays int       `json:"retention_days" db:"retention_days"`
 
-	StartTs time.Time `db:"start_ts"`
-	EndTs   time.Time `db:"end_ts"`
+	StartTs time.Time `json:"start_ts" db:"start_ts"`
+	EndTs   time.Time `json:"end_ts" db:"end_ts"`
 }
 
 func (e *Evidence) Scan(value any) error {
