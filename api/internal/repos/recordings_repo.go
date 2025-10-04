@@ -8,8 +8,7 @@ import (
 )
 
 type RecordingsRepoIface interface {
-	Upsert(ctx context.Context, recording *models.Recordings) (*models.Recordings, error)
-	FindOne(ctx context.Context, uuid string) (*models.Recordings, error)
+	Upsert(ctx context.Context, rec *models.Recordings) (*models.Recordings, error)
 }
 
 type PgxRecordingsRepo struct {

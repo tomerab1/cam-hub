@@ -1,6 +1,7 @@
 package frameanalyzer
 
 type AnalyzeImgsEvent struct {
-	UUID  string
-	Paths []string
+	UUID       string
+	VidPath    string
+	FramePaths []string
 }

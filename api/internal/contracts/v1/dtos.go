@@ -27,8 +27,9 @@ type CameraPairedEvent struct {
 }
 
 type AnalyzeImgsEvent struct {
-	UUID  string   `json:"uuid"`
-	Paths []string `json:"paths"`
+	UUID       string   `json:"uuid"`
+	VidPath    string   `json:"vid_path"`
+	FramePaths []string `json:"frame_paths"`
 }
 
 type CameraUnpairedEvent struct {

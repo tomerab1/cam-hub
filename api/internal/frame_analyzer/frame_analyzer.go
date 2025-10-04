@@ -12,10 +12,13 @@ import (
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	v1 "tomerab.com/cam-hub/internal/contracts/v1"
 	"tomerab.com/cam-hub/internal/events"
 	"tomerab.com/cam-hub/internal/frame_analyzer/tensorflow/core/framework"
 	pb "tomerab.com/cam-hub/internal/frame_analyzer/tensorflow_serving/apis"
 	objectstorage "tomerab.com/cam-hub/internal/object_storage"
+	"tomerab.com/cam-hub/internal/repos"
+	"tomerab.com/cam-hub/internal/services"
 )
 
 const (
@@ -27,25 +30,31 @@ const (
 	frameSz               = tensorW * tensorH * tensorC
 )
 
-var (
-	bucketName = os.Getenv("MINIO_BUCKET_NAME")
-)
-
 type FrameAnalyzer struct {
-	logger        *slog.Logger
-	bus           events.BusIface
-	minioClient   *objectstorage.MinIOStore
-	ctx           context.Context
-	imgAnalysisCh chan AnalyzeImgsEvent
+	logger           *slog.Logger
+	bus              events.BusIface
+	minioClient      *objectstorage.MinIOStore
+	recordingService *services.RecordingsService
+	ctx              context.Context
+	imgAnalysisCh    chan v1.AnalyzeImgsEvent
 }
 
-func New(ctx context.Context, logger *slog.Logger, bus events.BusIface, minioClient *objectstorage.MinIOStore) *FrameAnalyzer {
+func New(ctx context.Context,
+	logger *slog.Logger,
+	bus events.BusIface,
+	minioClient *objectstorage.MinIOStore,
+	recordingsRepo repos.RecordingsRepoIface,
+	camerasRepo repos.CameraRepoIface,
+) *FrameAnalyzer {
+	recordingServiceLogger := slog.New(logger.Handler()).With("service", "recordings")
+
 	return &FrameAnalyzer{
-		logger:        logger,
-		bus:           bus,
-		minioClient:   minioClient,
-		ctx:           ctx,
-		imgAnalysisCh: make(chan AnalyzeImgsEvent, maxConcurrentAnalysis),
+		logger:           logger,
+		bus:              bus,
+		minioClient:      minioClient,
+		recordingService: services.NewRecordingsService(recordingServiceLogger, recordingsRepo, camerasRepo),
+		ctx:              ctx,
+		imgAnalysisCh:    make(chan v1.AnalyzeImgsEvent, maxConcurrentAnalysis),
 	}
 }
 
@@ -62,7 +71,7 @@ func (analyzer *FrameAnalyzer) Run(ctx context.Context) {
 	}
 }
 
-func (analyzer *FrameAnalyzer) NotifyCtrl(ev AnalyzeImgsEvent) {
+func (analyzer *FrameAnalyzer) NotifyCtrl(ev v1.AnalyzeImgsEvent) {
 	analyzer.imgAnalysisCh <- ev
 }
 
@@ -76,7 +85,7 @@ func (analyzer *FrameAnalyzer) buildTensor(paths []string) ([]byte, error) {
 		end := (i + 1) * frameSz * 4
 
 		eg.Go(func() error {
-			obj, err := analyzer.minioClient.GetObject("recordings", p)
+			obj, err := analyzer.minioClient.GetObject(os.Getenv("MINIO_BUCKET_NAME"), p)
 			if err != nil {
 				return err
 			}
@@ -122,8 +131,8 @@ func (analyzer *FrameAnalyzer) buildTensor(paths []string) ([]byte, error) {
 	return batch, nil
 }
 
-func (analyzer *FrameAnalyzer) onAnalyze(ev *AnalyzeImgsEvent) error {
-	tensor, err := analyzer.buildTensor(ev.Paths)
+func (analyzer *FrameAnalyzer) onAnalyze(ev *v1.AnalyzeImgsEvent) error {
+	tensor, err := analyzer.buildTensor(ev.FramePaths)
 	if err != nil {
 		analyzer.logger.Error("onAnalyzer: failed to create tensor", "err", err.Error())
 		return err
@@ -167,7 +176,7 @@ func (analyzer *FrameAnalyzer) onAnalyze(ev *AnalyzeImgsEvent) error {
 		},
 	}
 
-	conn, err := grpc.NewClient("localhost:9000", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(os.Getenv("OVMS_GRPC_ADDR"), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return err
 	}
@@ -198,13 +207,28 @@ func (analyzer *FrameAnalyzer) onAnalyze(ev *AnalyzeImgsEvent) error {
 	}
 	defer outMat.Close()
 
+	max_conf := float32(-1.0)
+	max_conf_idx := 0
 	for row := 0; row < outMat.Rows(); row++ {
 		confidence := outMat.GetFloatAt(row, 2)
-		if confidence > 0.5 {
-			analyzer.logger.Info("detections found", "paths", ev.Paths)
-			return nil
+		if confidence > max_conf {
+			max_conf = confidence
+			max_conf_idx = row
 		}
 	}
+
+	state := services.StateDiscarded
+	whereToStore := os.Getenv("MINIO_FALSE_POSITIVES_KEY")
+	if max_conf >= 0.5 {
+		state = services.StatePromoted
+		buketName = os.Getenv("MINIO_DETECTIONS_KEY")
+	}
+
+	// TODO(tomer): Copy from staging dir to 'whereToStore'
+
+	analyzer.recordingService.Upsert(analyzer.ctx, ev.UUID, state, v1.AddRecordingReq{
+		BucketName: os.Getenv("MINIO_BUCKET_NAME"),
+	})
 
 	return nil
 }

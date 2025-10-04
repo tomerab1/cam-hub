@@ -7,6 +7,7 @@ import (
 	"os"
 	"syscall"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 	"gopkg.in/lumberjack.v3"
 	v1 "tomerab.com/cam-hub/internal/contracts/v1"
@@ -14,6 +15,7 @@ import (
 	"tomerab.com/cam-hub/internal/events/rabbitmq"
 	frameanalyzer "tomerab.com/cam-hub/internal/frame_analyzer"
 	objectstorage "tomerab.com/cam-hub/internal/object_storage"
+	"tomerab.com/cam-hub/internal/repos"
 	"tomerab.com/cam-hub/internal/utils"
 )
 
@@ -50,7 +52,17 @@ func main() {
 		logger.Error("failed to create MinIO client", "err", err.Error())
 		panic(err.Error())
 	}
-	analyzer := frameanalyzer.New(ctx, logger, bus, minioClient)
+
+	dbpool, err := pgxpool.New(ctx, os.Getenv("POSTGRES_DSN"))
+	if err != nil {
+		panic(err.Error())
+	}
+	defer dbpool.Close()
+
+	recordingsRepo := repos.NewPgxRecordingsRepo(dbpool)
+	camerasRepo := repos.NewPgxCameraRepo(dbpool)
+
+	analyzer := frameanalyzer.New(ctx, logger, bus, minioClient, recordingsRepo, camerasRepo)
 
 	bus.Consume(ctx, "motion.analyze", "", func(ctx context.Context, m events.Message) events.AckAction {
 		var msg v1.AnalyzeImgsEvent
@@ -59,10 +71,7 @@ func main() {
 			return events.NackDiscard
 		}
 
-		analyzer.NotifyCtrl(frameanalyzer.AnalyzeImgsEvent{
-			UUID:  msg.UUID,
-			Paths: msg.Paths,
-		})
+		analyzer.NotifyCtrl(msg)
 		return events.Ack
 	})
 

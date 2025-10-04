@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 
@@ -15,6 +16,10 @@ type RecordingState = string
 const (
 	StatePromoted  RecordingState = "promoted"
 	StateDiscarded RecordingState = "discarded"
+)
+
+var (
+	UpsertFailed = errors.New("recordings: failed to upsert recording")
 )
 
 type RecordingsService struct {
@@ -34,7 +39,7 @@ func NewRecordingsService(
 	}
 }
 
-func (svc *RecordingsService) Insert(
+func (svc *RecordingsService) Upsert(
 	ctx context.Context,
 	camUUID string,
 	state RecordingState,
@@ -62,7 +67,7 @@ func (svc *RecordingsService) Insert(
 		EndTs:              req.EndTs,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to upsert recording: %w", err)
+		return nil, UpsertFailed
 	}
 
 	return rec, nil
