@@ -72,7 +72,7 @@ func (runner *Runner) process(ctx MotionCtx) error {
 		return err
 	}
 
-	objPath := ctx.UUID + "/" + ctx.TimePoint.UTC().Format("2006-01-02_15-04-05")
+	objPath := os.Getenv("MINIO_STAGING_KEY") + "/" + ctx.UUID + "/" + ctx.TimePoint.UTC().Format("2006-01-02_15-04-05")
 	if err := runner.uploadVideoToStore(bucketName, objPath, outFileName); err != nil {
 		runner.logger.Error("failed to upload video to store", "err", err.Error())
 		return err
@@ -89,8 +89,9 @@ func (runner *Runner) process(ctx MotionCtx) error {
 	}
 
 	bytes, err := json.Marshal(v1.AnalyzeImgsEvent{
-		UUID: ctx.UUID,
-		Paths: utils.Map(framePaths, func(p string) string {
+		UUID:    ctx.UUID,
+		VidPath: objPath + "/" + outFileName,
+		FramePaths: utils.Map(framePaths, func(p string) string {
 			return objPath + "/" + p
 		}),
 	})

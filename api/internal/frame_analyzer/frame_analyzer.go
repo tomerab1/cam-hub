@@ -6,6 +6,8 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"strconv"
+	"strings"
 
 	google_protobuf "github.com/golang/protobuf/ptypes/wrappers"
 	"gocv.io/x/gocv"
@@ -192,42 +194,71 @@ func (analyzer *FrameAnalyzer) onAnalyze(ev *v1.AnalyzeImgsEvent) error {
 	if !ok {
 		return fmt.Errorf("expected output: %s does not exist in the response", OUTPUT_NAME)
 	}
-	responseContent := respProto.GetTensorContent()
-	outputShape := respProto.GetTensorShape()
 	// shape should be [4, 1, 200, 7]
 	// 4 - batch size, 1 - class (person or not), 200 - max number of detections per image, 7 - detection info
-	dims := outputShape.GetDim()
+	responseContent := respProto.GetTensorContent()
+	dim := respProto.GetTensorShape().GetDim()
+	numClasses := int(dim[3].GetSize())
+	numRows := int(dim[2].GetSize())
 
-	maxDetections := int(dims[2].GetSize())
-	detectionFeatures := int(dims[3].GetSize())
+	analyzer.logger.Debug("tensor shape", "num_classes", numClasses, "num_rows", numRows)
 
-	outMat, err := gocv.NewMatFromBytes(maxDetections, detectionFeatures, gocv.MatTypeCV32FC1, responseContent)
+	outMat, err := gocv.NewMatFromBytes(numRows, numClasses, gocv.MatTypeCV32FC1, responseContent)
 	if err != nil {
 		return err
 	}
 	defer outMat.Close()
 
-	max_conf := float32(-1.0)
-	max_conf_idx := 0
-	for row := 0; row < outMat.Rows(); row++ {
-		confidence := outMat.GetFloatAt(row, 2)
-		if confidence > max_conf {
-			max_conf = confidence
-			max_conf_idx = row
-		}
+	confCol := outMat.Col(2)
+	defer confCol.Close()
+
+	_, maxConf, _, maxLoc := gocv.MinMaxLoc(confCol)
+	imageIndex := int(maxLoc.Y / numRows)
+	detectionRow := outMat.Row(maxLoc.Y)
+	defer detectionRow.Close()
+
+	evidence := v1.Evidence{
+		Conf: maxConf,
+		Xmin: detectionRow.GetFloatAt(0, 3),
+		Ymin: detectionRow.GetFloatAt(0, 4),
+		Xmax: detectionRow.GetFloatAt(0, 5),
+		Ymax: detectionRow.GetFloatAt(0, 6),
 	}
 
 	state := services.StateDiscarded
 	whereToStore := os.Getenv("MINIO_FALSE_POSITIVES_KEY")
-	if max_conf >= 0.5 {
+	retentionDaysStr := os.Getenv("MINIO_FALSE_POSITIVES_DAYS")
+	if maxConf >= 0.5 {
 		state = services.StatePromoted
-		buketName = os.Getenv("MINIO_DETECTIONS_KEY")
+		whereToStore = os.Getenv("MINIO_DETECTIONS_KEY")
+		retentionDaysStr = os.Getenv("MINIO_DETECTIONS_DAYS")
 	}
 
-	// TODO(tomer): Copy from staging dir to 'whereToStore'
+	retentionDays, err := strconv.Atoi(retentionDaysStr)
+	if err != nil {
+		return err
+	}
+
+	allObjs := append([]string{ev.VidPath}, ev.FramePaths...)
+	for _, obj := range allObjs {
+		objName := strings.TrimPrefix(obj, os.Getenv("MINIO_STAGING_KEY")+"/")
+		if _, err := analyzer.minioClient.CopyObjectWithinBucket(
+			os.Getenv("MINIO_BUCKET_NAME"),
+			os.Getenv("MINIO_STAGING_KEY"),
+			whereToStore,
+			objName,
+		); err != nil {
+			return err
+		}
+	}
 
 	analyzer.recordingService.Upsert(analyzer.ctx, ev.UUID, state, v1.AddRecordingReq{
-		BucketName: os.Getenv("MINIO_BUCKET_NAME"),
+		BucketName:         os.Getenv("MINIO_BUCKET_NAME"),
+		VidBucketKey:       whereToStore + "/" + ev.VidPath,
+		BestFrameBucketKey: whereToStore + "/" + ev.FramePaths[imageIndex],
+		Evidence:           evidence,
+		Score:              maxConf,
+		RetentionDays:      retentionDays,
 	})
 
 	return nil

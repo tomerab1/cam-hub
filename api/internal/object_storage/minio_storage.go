@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/url"
 	"os"
+	"path"
 	"time"
 
 	"github.com/minio/minio-go/v7"
@@ -16,7 +17,7 @@ type ContentType = string
 
 const (
 	UrlVideo ContentType = "video/mp4"
-	UrlPng               = "image/png"
+	UrlPng   ContentType = "image/png"
 )
 
 type MinIOStore struct {
@@ -63,6 +64,20 @@ func (store *MinIOStore) RemoveBucket(bucketName string) error {
 	return store.client.RemoveBucket(store.ctx, bucketName)
 }
 
+func (store *MinIOStore) CopyObjectWithinBucket(bucket, srcPrefix, dstPrefix, objName string) (minio.UploadInfo, error) {
+	srcKey := path.Join(srcPrefix, objName)
+	dstKey := path.Join(dstPrefix, objName)
+
+	srcOpts := minio.CopySrcOptions{
+		Bucket: bucket,
+		Object: srcKey,
+	}
+	dstOpts := minio.CopyDestOptions{
+		Bucket: bucket,
+		Object: dstKey,
+	}
+	return store.client.CopyObject(store.ctx, dstOpts, srcOpts)
+}
 func (store *MinIOStore) PutObject(bucketName, objName string, reader io.Reader, objSz int64, retainUntil time.Time) (minio.UploadInfo, error) {
 	return store.client.PutObject(
 		store.ctx,

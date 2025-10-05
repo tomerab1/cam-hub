@@ -58,13 +58,19 @@ func (svc *RecordingsService) Upsert(
 		BucketName:         req.BucketName,
 		VidBucketKey:       req.VidBucketKey,
 		BestFrameBucketKey: req.BestFrameBucketKey,
-		Evidence:           req.Evidence,
-		Score:              req.Score,
-		State:              state,
-		NeedsPublish:       needsPublish,
-		RetentionDays:      req.RetentionDays,
-		StartTs:            req.StartTs,
-		EndTs:              req.EndTs,
+		Evidence: models.Evidence{
+			Conf: req.Evidence.Conf,
+			Xmin: req.Evidence.Xmin,
+			Xmax: req.Evidence.Xmax,
+			Ymin: req.Evidence.Ymin,
+			Ymax: req.Evidence.Ymax,
+		},
+		Score:         req.Score,
+		State:         state,
+		NeedsPublish:  needsPublish,
+		RetentionDays: req.RetentionDays,
+		StartTs:       req.StartTs,
+		EndTs:         req.EndTs,
 	})
 	if err != nil {
 		return nil, UpsertFailed
