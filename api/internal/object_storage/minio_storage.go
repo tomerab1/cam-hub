@@ -78,7 +78,8 @@ func (store *MinIOStore) CopyObjectWithinBucket(bucket, srcPrefix, dstPrefix, ob
 	}
 	return store.client.CopyObject(store.ctx, dstOpts, srcOpts)
 }
-func (store *MinIOStore) PutObject(bucketName, objName string, reader io.Reader, objSz int64, retainUntil time.Time) (minio.UploadInfo, error) {
+
+func (store *MinIOStore) PutObject(bucketName, objName string, reader io.Reader, objSz int64) (minio.UploadInfo, error) {
 	return store.client.PutObject(
 		store.ctx,
 		bucketName,
@@ -86,11 +87,13 @@ func (store *MinIOStore) PutObject(bucketName, objName string, reader io.Reader,
 		reader,
 		objSz,
 		minio.PutObjectOptions{
-			ContentType:     "application/octet-stream",
-			RetainUntilDate: retainUntil,
-			Mode:            minio.Governance,
+			ContentType: "application/octet-stream",
 		},
 	)
+}
+
+func (store *MinIOStore) RemoveObject(bucketName, objName string) error {
+	return store.client.RemoveObject(store.ctx, bucketName, objName, minio.RemoveObjectOptions{})
 }
 
 func (store *MinIOStore) GetObject(bucketName, objectName string) (*minio.Object, error) {

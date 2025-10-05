@@ -28,6 +28,7 @@ type CameraPairedEvent struct {
 
 type AnalyzeImgsEvent struct {
 	UUID       string   `json:"uuid"`
+	Tp         string   `json:"tp"`
 	VidPath    string   `json:"vid_path"`
 	FramePaths []string `json:"frame_paths"`
 }

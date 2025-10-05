@@ -3,9 +3,11 @@ package frameanalyzer
 import (
 	"context"
 	"fmt"
+	"image"
 	"io"
 	"log/slog"
 	"os"
+	"path"
 	"strconv"
 	"strings"
 
@@ -39,6 +41,15 @@ type FrameAnalyzer struct {
 	recordingService *services.RecordingsService
 	ctx              context.Context
 	imgAnalysisCh    chan v1.AnalyzeImgsEvent
+}
+
+type tensorData struct {
+	numClasses int
+	numRows    int
+	imageIndex int
+	maxConf    float32
+	maxLoc     image.Point
+	evidence   v1.Evidence
 }
 
 func New(ctx context.Context,
@@ -133,16 +144,134 @@ func (analyzer *FrameAnalyzer) buildTensor(paths []string) ([]byte, error) {
 	return batch, nil
 }
 
+func (analyzer *FrameAnalyzer) minioMoveObjects(whereToStore string, ev *v1.AnalyzeImgsEvent) error {
+	allObjs := append([]string{ev.VidPath}, ev.FramePaths...)
+
+	for _, obj := range allObjs {
+		objName := strings.TrimPrefix(obj, os.Getenv("MINIO_STAGING_KEY")+"/")
+		bucketName := os.Getenv("MINIO_BUCKET_NAME")
+
+		if _, err := analyzer.minioClient.CopyObjectWithinBucket(
+			bucketName,
+			os.Getenv("MINIO_STAGING_KEY"),
+			whereToStore,
+			objName,
+		); err != nil {
+			return err
+		}
+
+		if err := analyzer.minioClient.RemoveObject(bucketName, obj); err != nil {
+			return err
+		}
+	}
+
+	objName := path.Join(os.Getenv("MINIO_BUCKET_NAME"), os.Getenv("MINIO_STAGING_KEY"), ev.UUID, ev.Tp)
+	if err := analyzer.minioClient.RemoveObject(os.Getenv("MINIO_BUCKET_NAME"), objName); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (analyzer *FrameAnalyzer) onAnalyze(ev *v1.AnalyzeImgsEvent) error {
+	const OUTPUT_NAME = "detection_out"
+
 	tensor, err := analyzer.buildTensor(ev.FramePaths)
 	if err != nil {
 		analyzer.logger.Error("onAnalyzer: failed to create tensor", "err", err.Error())
 		return err
 	}
 
+	predictResp, err := analyzer.predict(tensor)
+	if err != nil {
+		return err
+	}
+
+	respProto, ok := predictResp.Outputs[OUTPUT_NAME]
+	if !ok {
+		return fmt.Errorf("expected output: %s does not exist in the response", OUTPUT_NAME)
+	}
+
+	tensorData, err := analyzer.extractDataFromTensor(respProto)
+	if err != nil {
+		return err
+	}
+
+	state := services.StateDiscarded
+	whereToStore := os.Getenv("MINIO_FALSE_POSITIVES_KEY")
+	retentionDaysStr := os.Getenv("MINIO_FALSE_POSITIVES_DAYS")
+	if tensorData.maxConf >= 0.5 {
+		state = services.StatePromoted
+		whereToStore = os.Getenv("MINIO_DETECTIONS_KEY")
+		retentionDaysStr = os.Getenv("MINIO_DETECTIONS_DAYS")
+	}
+
+	retentionDays, err := strconv.Atoi(retentionDaysStr)
+	if err != nil {
+		return err
+	}
+
+	if err := analyzer.minioMoveObjects(whereToStore, ev); err != nil {
+		return err
+	}
+
+	analyzer.recordingService.Upsert(analyzer.ctx, ev.UUID, state, v1.AddRecordingReq{
+		BucketName:         os.Getenv("MINIO_BUCKET_NAME"),
+		VidBucketKey:       path.Join(whereToStore, ev.VidPath),
+		BestFrameBucketKey: path.Join(whereToStore, ev.FramePaths[tensorData.imageIndex]),
+		Evidence:           tensorData.evidence,
+		Score:              tensorData.maxConf,
+		RetentionDays:      retentionDays,
+	})
+
+	analyzer.logger.Debug("upserted new recording", "where_to_store", whereToStore, "state", state, "max_conf", tensorData.maxConf)
+
+	return nil
+}
+
+func (analyzer *FrameAnalyzer) extractDataFromTensor(respProto *framework.TensorProto) (*tensorData, error) {
+	// shape should be [4, 1, 200, 7]
+	// 4 - batch size, 1 - class (person or not), 200 - max number of detections per image, 7 - detection info
+	responseContent := respProto.GetTensorContent()
+	dim := respProto.GetTensorShape().GetDim()
+	numClasses := int(dim[3].GetSize())
+	numRows := int(dim[2].GetSize())
+
+	outMat, err := gocv.NewMatFromBytes(numRows, numClasses, gocv.MatTypeCV32FC1, responseContent)
+	if err != nil {
+		return nil, err
+	}
+	defer outMat.Close()
+
+	confCol := outMat.Col(2)
+	defer confCol.Close()
+
+	_, maxConf, _, maxLoc := gocv.MinMaxLoc(confCol)
+	imageIndex := int(maxLoc.Y / numRows)
+	detectionRow := outMat.Row(maxLoc.Y)
+	defer detectionRow.Close()
+
+	evidence := v1.Evidence{
+		Conf: maxConf,
+		Xmin: detectionRow.GetFloatAt(0, 3),
+		Ymin: detectionRow.GetFloatAt(0, 4),
+		Xmax: detectionRow.GetFloatAt(0, 5),
+		Ymax: detectionRow.GetFloatAt(0, 6),
+	}
+
+	return &tensorData{
+		numClasses: numClasses,
+		numRows:    numRows,
+		imageIndex: imageIndex,
+		evidence:   evidence,
+		maxConf:    maxConf,
+		maxLoc:     maxLoc,
+	}, nil
+}
+
+func (analyzer *FrameAnalyzer) predict(tensor []byte) (*pb.PredictResponse, error) {
 	const MODEL_NAME = "person-detection-retail-0013"
 	const INPUT_NAME = "data"
-	const OUTPUT_NAME = "detection_out"
 
 	predicRequest := &pb.PredictRequest{
 		ModelSpec: &pb.ModelSpec{
@@ -178,88 +307,21 @@ func (analyzer *FrameAnalyzer) onAnalyze(ev *v1.AnalyzeImgsEvent) error {
 		},
 	}
 
-	conn, err := grpc.NewClient(os.Getenv("OVMS_GRPC_ADDR"), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(
+		os.Getenv("OVMS_GRPC_ADDR"),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer conn.Close()
 
 	client := pb.NewPredictionServiceClient(conn)
 	predictResp, err := client.Predict(analyzer.ctx, predicRequest)
 	if err != nil {
-		return fmt.Errorf("gRPC request failed: %w", err)
+		return nil, fmt.Errorf("gRPC request failed: %w", err)
 	}
 
-	respProto, ok := predictResp.Outputs[OUTPUT_NAME]
-	if !ok {
-		return fmt.Errorf("expected output: %s does not exist in the response", OUTPUT_NAME)
-	}
-	// shape should be [4, 1, 200, 7]
-	// 4 - batch size, 1 - class (person or not), 200 - max number of detections per image, 7 - detection info
-	responseContent := respProto.GetTensorContent()
-	dim := respProto.GetTensorShape().GetDim()
-	numClasses := int(dim[3].GetSize())
-	numRows := int(dim[2].GetSize())
-
-	analyzer.logger.Debug("tensor shape", "num_classes", numClasses, "num_rows", numRows)
-
-	outMat, err := gocv.NewMatFromBytes(numRows, numClasses, gocv.MatTypeCV32FC1, responseContent)
-	if err != nil {
-		return err
-	}
-	defer outMat.Close()
-
-	confCol := outMat.Col(2)
-	defer confCol.Close()
-
-	_, maxConf, _, maxLoc := gocv.MinMaxLoc(confCol)
-	imageIndex := int(maxLoc.Y / numRows)
-	detectionRow := outMat.Row(maxLoc.Y)
-	defer detectionRow.Close()
-
-	evidence := v1.Evidence{
-		Conf: maxConf,
-		Xmin: detectionRow.GetFloatAt(0, 3),
-		Ymin: detectionRow.GetFloatAt(0, 4),
-		Xmax: detectionRow.GetFloatAt(0, 5),
-		Ymax: detectionRow.GetFloatAt(0, 6),
-	}
-
-	state := services.StateDiscarded
-	whereToStore := os.Getenv("MINIO_FALSE_POSITIVES_KEY")
-	retentionDaysStr := os.Getenv("MINIO_FALSE_POSITIVES_DAYS")
-	if maxConf >= 0.5 {
-		state = services.StatePromoted
-		whereToStore = os.Getenv("MINIO_DETECTIONS_KEY")
-		retentionDaysStr = os.Getenv("MINIO_DETECTIONS_DAYS")
-	}
-
-	retentionDays, err := strconv.Atoi(retentionDaysStr)
-	if err != nil {
-		return err
-	}
-
-	allObjs := append([]string{ev.VidPath}, ev.FramePaths...)
-	for _, obj := range allObjs {
-		objName := strings.TrimPrefix(obj, os.Getenv("MINIO_STAGING_KEY")+"/")
-		if _, err := analyzer.minioClient.CopyObjectWithinBucket(
-			os.Getenv("MINIO_BUCKET_NAME"),
-			os.Getenv("MINIO_STAGING_KEY"),
-			whereToStore,
-			objName,
-		); err != nil {
-			return err
-		}
-	}
-
-	analyzer.recordingService.Upsert(analyzer.ctx, ev.UUID, state, v1.AddRecordingReq{
-		BucketName:         os.Getenv("MINIO_BUCKET_NAME"),
-		VidBucketKey:       whereToStore + "/" + ev.VidPath,
-		BestFrameBucketKey: whereToStore + "/" + ev.FramePaths[imageIndex],
-		Evidence:           evidence,
-		Score:              maxConf,
-		RetentionDays:      retentionDays,
-	})
-
-	return nil
+	return predictResp, nil
 }
