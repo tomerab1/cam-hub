@@ -92,6 +92,31 @@ func (store *MinIOStore) PutObject(bucketName, objName string, reader io.Reader,
 	)
 }
 
+func (store *MinIOStore) RemoveObjects(bucketName, objPrefix string) error {
+	objsCh := make(chan minio.ObjectInfo)
+
+	go func() {
+		defer close(objsCh)
+
+		for obj := range store.client.ListObjects(store.ctx, bucketName, minio.ListObjectsOptions{
+			Prefix: objPrefix,
+		}) {
+			if obj.Err != nil {
+				store.logger.Error("removeObjects: failed to list object", "bucket_name", bucketName, "obj_prefix", objPrefix)
+				return
+			}
+
+			objsCh <- obj
+		}
+	}()
+
+	for err := range store.client.RemoveObjects(store.ctx, bucketName, objsCh, minio.RemoveObjectsOptions{}) {
+		return err.Err
+	}
+
+	return nil
+}
+
 func (store *MinIOStore) RemoveObject(bucketName, objName string) error {
 	return store.client.RemoveObject(store.ctx, bucketName, objName, minio.RemoveObjectOptions{})
 }

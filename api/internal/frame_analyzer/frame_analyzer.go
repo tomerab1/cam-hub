@@ -145,28 +145,27 @@ func (analyzer *FrameAnalyzer) buildTensor(paths []string) ([]byte, error) {
 }
 
 func (analyzer *FrameAnalyzer) minioMoveObjects(whereToStore string, ev *v1.AnalyzeImgsEvent) error {
-	allObjs := append([]string{ev.VidPath}, ev.FramePaths...)
+	bucketName := os.Getenv("MINIO_BUCKET_NAME")
+	stagingKey := os.Getenv("MINIO_STAGING_KEY")
 
-	for _, obj := range allObjs {
-		objName := strings.TrimPrefix(obj, os.Getenv("MINIO_STAGING_KEY")+"/")
-		bucketName := os.Getenv("MINIO_BUCKET_NAME")
+	dirPrefix := path.Join(stagingKey, ev.UUID, ev.Tp)
+	allObjs := append([]string{ev.VidPath}, ev.FramePaths...)
+	for _, srcKey := range allObjs {
+		objName := strings.TrimPrefix(srcKey, stagingKey+"/")
 
 		if _, err := analyzer.minioClient.CopyObjectWithinBucket(
 			bucketName,
-			os.Getenv("MINIO_STAGING_KEY"),
+			stagingKey,
 			whereToStore,
 			objName,
 		); err != nil {
 			return err
 		}
-
-		if err := analyzer.minioClient.RemoveObject(bucketName, obj); err != nil {
-			return err
-		}
 	}
 
-	objName := path.Join(os.Getenv("MINIO_BUCKET_NAME"), os.Getenv("MINIO_STAGING_KEY"), ev.UUID, ev.Tp)
-	if err := analyzer.minioClient.RemoveObject(os.Getenv("MINIO_BUCKET_NAME"), objName); err != nil {
+	// bulk remove all the objects under 'dirPrefix' (all the objects we remove are under the
+	// same 'dir' object)
+	if err := analyzer.minioClient.RemoveObjects(bucketName, dirPrefix); err != nil {
 		return err
 	}
 
