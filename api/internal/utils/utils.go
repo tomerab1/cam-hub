@@ -77,6 +77,12 @@ func Map[T, U any](s []T, f func(T) U) []U {
 	return result
 }
 
+func Swap[T any](s []T, i, j int) {
+	tmp := s[i]
+	s[i] = s[j]
+	s[j] = tmp
+}
+
 func GracefullShutdown(ctx context.Context, onShutdown func(), sigs ...os.Signal) (context.Context, context.CancelFunc) {
 	ctx, cancel := context.WithCancel(ctx)
 	c := make(chan os.Signal, 1)

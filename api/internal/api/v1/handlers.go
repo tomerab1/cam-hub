@@ -123,6 +123,39 @@ func discoverySSE(app *application.Application) http.HandlerFunc {
 	}
 }
 
+func alertsSSE(app *application.Application) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Connection", "keep-alive")
+
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			http.Error(w, "streaming unsupported", http.StatusInternalServerError)
+			return
+		}
+
+		ctx := r.Context()
+		uuid := r.PathValue("uuid")
+		if !app.CameraService.CameraExists(ctx, uuid) {
+			http.Error(w, fmt.Sprintf("cameras (%s) does not exist", uuid), http.StatusBadRequest)
+			return
+		}
+
+		subCh := app.PubSub.Subscribe(uuid)
+		for {
+			select {
+			case msg := <-subCh:
+				data, _ := json.Marshal(msg)
+				fmt.Fprintf(w, "data: %s\n\n", data)
+				flusher.Flush()
+			case <-ctx.Done():
+				return
+			}
+		}
+	}
+}
+
 func getCameras(app *application.Application) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)

@@ -2,6 +2,7 @@ package repos
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/georgysavva/scany/v2/pgxscan"
 	"tomerab.com/cam-hub/internal/api/v1/models"
@@ -23,6 +24,11 @@ func NewPgxRecordingsRepo(db DBPoolIface) *PgxRecordingsRepo {
 
 func (repo *PgxRecordingsRepo) Upsert(ctx context.Context, rec *models.Recordings) (*models.Recordings, error) {
 	var out models.Recordings
+
+	evidenceBytes, err := json.Marshal(rec.Evidence)
+	if err != nil {
+		return nil, err
+	}
 
 	q := `
 		INSERT INTO recordings (
@@ -49,7 +55,7 @@ func (repo *PgxRecordingsRepo) Upsert(ctx context.Context, rec *models.Recording
 		rec.BucketName,
 		rec.VidBucketKey,
 		rec.BestFrameBucketKey,
-		rec.Evidence,
+		evidenceBytes,
 		rec.Score,
 		rec.State,
 		rec.NeedsPublish,
@@ -57,6 +63,10 @@ func (repo *PgxRecordingsRepo) Upsert(ctx context.Context, rec *models.Recording
 		rec.StartTs,
 		rec.EndTs,
 	); err != nil {
+		return nil, err
+	}
+
+	if err := json.Unmarshal(out.EvidenceRaw, &out.Evidence); err != nil {
 		return nil, err
 	}
 

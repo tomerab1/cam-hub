@@ -16,6 +16,7 @@ type CameraRepoIface interface {
 	FindExistingPaired(ctx context.Context, uuids []string) ([]bool, error)
 	FindOne(ctx context.Context, uuid string) (*models.Camera, error)
 	FindMany(ctx context.Context, offset, limit int) ([]*models.Camera, error)
+	FindAllUUIDS(ctx context.Context) ([]string, error)
 	Save(ctx context.Context, cam *models.Camera) error
 	Delete(ctx context.Context, uuid string) error
 }
@@ -189,4 +190,13 @@ func (repo *PgxCameraRepo) FindMany(ctx context.Context, offset, limit int) ([]*
 												LIMIT $1 OFFSET $2
 												`, limit, offset)
 	return cams, err
+}
+
+func (repo *PgxCameraRepo) FindAllUUIDS(ctx context.Context) ([]string, error) {
+	var uuids []string
+	err := pgxscan.Select(ctx, repo.DB, &uuids, `SELECT
+													id FROM cameras
+													where ispaired = true
+												`)
+	return uuids, err
 }

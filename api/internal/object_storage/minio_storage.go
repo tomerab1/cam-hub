@@ -99,7 +99,8 @@ func (store *MinIOStore) RemoveObjects(bucketName, objPrefix string) error {
 		defer close(objsCh)
 
 		for obj := range store.client.ListObjects(store.ctx, bucketName, minio.ListObjectsOptions{
-			Prefix: objPrefix,
+			Prefix:    objPrefix,
+			Recursive: true,
 		}) {
 			if obj.Err != nil {
 				store.logger.Error("removeObjects: failed to list object", "bucket_name", bucketName, "obj_prefix", objPrefix)

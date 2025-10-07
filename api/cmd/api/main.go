@@ -17,6 +17,8 @@ import (
 	"gopkg.in/lumberjack.v3"
 	"tomerab.com/cam-hub/internal/application"
 	v1 "tomerab.com/cam-hub/internal/contracts/v1"
+	"tomerab.com/cam-hub/internal/events"
+	inmemory "tomerab.com/cam-hub/internal/events/in_memory"
 	"tomerab.com/cam-hub/internal/events/rabbitmq"
 	"tomerab.com/cam-hub/internal/httpserver"
 	"tomerab.com/cam-hub/internal/mtxapi"
@@ -111,6 +113,10 @@ func main() {
 		panic(err.Error())
 	}
 
+	if err := bus.DeclareQueue("motion.detections", true, nil); err != nil {
+		panic(err.Error())
+	}
+
 	app := &application.Application{
 		Logger:           appLogger,
 		LogSink:          fileHandler,
@@ -136,8 +142,20 @@ func main() {
 			CamCredsRepo: credsRepo,
 			HttpClient:   &httpClient,
 		},
-		Bus: bus,
+		Bus:    bus,
+		PubSub: inmemory.NewInMemoryPubSub(),
 	}
+
+	app.Bus.Consume(rootCtx, "motion.detections", "", func(ctx context.Context, m events.Message) events.AckAction {
+		uuid, ok := m.Headers["uuid"].(string)
+		if !ok {
+			app.Logger.Error("missing uuid in message headers")
+			return events.NackDiscard
+		}
+
+		app.PubSub.Broadcast(uuid, m.Body)
+		return events.Ack
+	})
 
 	srv := http.Server{
 		Addr:    os.Getenv("SERVER_ADDR"),

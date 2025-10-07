@@ -2,6 +2,7 @@ package frameanalyzer
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"image"
 	"io"
@@ -165,6 +166,7 @@ func (analyzer *FrameAnalyzer) minioMoveObjects(whereToStore string, ev *v1.Anal
 
 	// bulk remove all the objects under 'dirPrefix' (all the objects we remove are under the
 	// same 'dir' object)
+	analyzer.logger.Debug("deleting objects from", "bucket_name", bucketName, "prefix", dirPrefix)
 	if err := analyzer.minioClient.RemoveObjects(bucketName, dirPrefix); err != nil {
 		return err
 	}
@@ -214,16 +216,32 @@ func (analyzer *FrameAnalyzer) onAnalyze(ev *v1.AnalyzeImgsEvent) error {
 		return err
 	}
 
-	analyzer.recordingService.Upsert(analyzer.ctx, ev.UUID, state, v1.AddRecordingReq{
+	req := v1.AddRecordingReq{
 		BucketName:         os.Getenv("MINIO_BUCKET_NAME"),
 		VidBucketKey:       path.Join(whereToStore, ev.VidPath),
 		BestFrameBucketKey: path.Join(whereToStore, ev.FramePaths[tensorData.imageIndex]),
 		Evidence:           tensorData.evidence,
 		Score:              tensorData.maxConf,
 		RetentionDays:      retentionDays,
-	})
+	}
+
+	model, err := analyzer.recordingService.Upsert(analyzer.ctx, ev.UUID, state, req)
+	if err != nil {
+		return err
+	}
 
 	analyzer.logger.Debug("upserted new recording", "where_to_store", whereToStore, "state", state, "max_conf", tensorData.maxConf)
+
+	if model.Score >= 0.5 {
+		modelBytes, err := json.Marshal(model)
+		if err != nil {
+			return err
+		}
+		queueName := fmt.Sprintf("cam.%s.detection", ev.UUID)
+		if err := analyzer.bus.Publish(analyzer.ctx, "motion.events", queueName, modelBytes, map[string]any{"uuid": model.CamUUID}); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }

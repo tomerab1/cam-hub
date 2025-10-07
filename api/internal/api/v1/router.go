@@ -19,6 +19,7 @@ func LoadRoutes(app *application.Application) *chi.Mux {
 	})
 
 	r.Get("/events/discovery", discoverySSE(app))
+	r.Get("/events/recordings/{uuid}", alertsSSE(app))
 
 	return r
 }

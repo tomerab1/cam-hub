@@ -126,3 +126,12 @@ func (svc *CameraService) Unpair(ctx context.Context, uuid string) error {
 func (svc *CameraService) GetCameras(ctx context.Context, offset, limit int) ([]*models.Camera, error) {
 	return svc.CamRepo.FindMany(ctx, offset, limit)
 }
+
+func (svc *CameraService) GetAllUUIDS(ctx context.Context) ([]string, error) {
+	return svc.CamRepo.FindAllUUIDS(ctx)
+}
+
+func (svc *CameraService) CameraExists(ctx context.Context, uuid string) bool {
+	_, err := svc.CamRepo.FindOne(ctx, uuid)
+	return err == nil
+}

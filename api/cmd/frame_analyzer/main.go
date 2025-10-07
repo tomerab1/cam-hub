@@ -43,6 +43,9 @@ func main() {
 	if err := bus.DeclareQueue("motion.analyze", true, nil); err != nil {
 		panic(err.Error())
 	}
+	if err := bus.DeclareQueue("motion.detections", true, nil); err != nil {
+		panic(err.Error())
+	}
 
 	ctx, cancel := utils.GracefullShutdown(context.Background(), func() {}, syscall.SIGTERM, syscall.SIGINT)
 	defer cancel()
