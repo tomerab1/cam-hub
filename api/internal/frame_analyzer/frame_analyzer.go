@@ -237,8 +237,7 @@ func (analyzer *FrameAnalyzer) onAnalyze(ev *v1.AnalyzeImgsEvent) error {
 		if err != nil {
 			return err
 		}
-		queueName := fmt.Sprintf("cam.%s.detection", ev.UUID)
-		if err := analyzer.bus.Publish(analyzer.ctx, "motion.events", queueName, modelBytes, map[string]any{"uuid": model.CamUUID}); err != nil {
+		if err := analyzer.bus.Publish(analyzer.ctx, "", "motion.detections", modelBytes, map[string]any{"uuid": model.CamUUID}); err != nil {
 			return err
 		}
 	}

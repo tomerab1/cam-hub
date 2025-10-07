@@ -110,11 +110,17 @@ func discoverySSE(app *application.Application) http.HandlerFunc {
 		}
 
 		ctx := r.Context()
+		keepAliveTicker := time.NewTicker(time.Second * 20)
+		defer keepAliveTicker.Stop()
+
 		for {
 			select {
 			case evt := <-app.SseChan:
 				data, _ := json.Marshal(evt)
 				fmt.Fprintf(w, "data: %s\n\n", data)
+				flusher.Flush()
+			case <-keepAliveTicker.C:
+				fmt.Fprint(w, ":\n\n")
 				flusher.Flush()
 			case <-ctx.Done():
 				return
@@ -143,11 +149,17 @@ func alertsSSE(app *application.Application) http.HandlerFunc {
 		}
 
 		subCh := app.PubSub.Subscribe(uuid)
+		defer app.PubSub.Unsubscribe(uuid, subCh)
+		keepAliveTicker := time.NewTicker(time.Second * 10)
+		defer keepAliveTicker.Stop()
+
 		for {
 			select {
 			case msg := <-subCh:
-				data, _ := json.Marshal(msg)
-				fmt.Fprintf(w, "data: %s\n\n", data)
+				fmt.Fprintf(w, "data: %s\n\n", msg)
+				flusher.Flush()
+			case <-keepAliveTicker.C:
+				fmt.Fprint(w, ":\n\n")
 				flusher.Flush()
 			case <-ctx.Done():
 				return

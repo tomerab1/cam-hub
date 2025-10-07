@@ -158,8 +158,10 @@ func main() {
 	})
 
 	srv := http.Server{
-		Addr:    os.Getenv("SERVER_ADDR"),
-		Handler: httpserver.NewRouter(app),
+		Addr:         os.Getenv("SERVER_ADDR"),
+		Handler:      httpserver.NewRouter(app),
+		WriteTimeout: 0,
+		IdleTimeout:  0,
 	}
 	shutdownErrChan := make(chan error)
 	onShutdown := func() {
