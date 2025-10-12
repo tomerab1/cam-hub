@@ -7,10 +7,16 @@ import (
 )
 
 type PairDeviceReq struct {
-	Addr       string `json:"addr"`
-	CameraName string `json:"camera_name"`
-	Username   string `json:"username"`
-	Password   string `json:"password"`
+	Addr         string `json:"addr"`
+	CameraName   string `json:"camera_name"`
+	Username     string `json:"username"`
+	Password     string `json:"password"`
+	WifiName     string `json:"wifi_name"`     // SSID
+	WifiPassword string `json:"wifi_password"` // PSK
+}
+
+type UnpairDeviceReq struct {
+	UUID string `json:"uuid"`
 }
 
 type DiscoveryEvent struct {
@@ -65,4 +71,8 @@ type AddRecordingReq struct {
 
 	StartTs time.Time `json:"start_ts"`
 	EndTs   time.Time `json:"end_ts"`
+}
+
+type SetLightModeReq struct {
+	Mode string `json:"mode"`
 }

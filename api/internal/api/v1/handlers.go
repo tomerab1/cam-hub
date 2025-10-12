@@ -12,6 +12,7 @@ import (
 	"tomerab.com/cam-hub/internal/api"
 	"tomerab.com/cam-hub/internal/application"
 	v1 "tomerab.com/cam-hub/internal/contracts/v1"
+	dvripclient "tomerab.com/cam-hub/internal/dvrip"
 	"tomerab.com/cam-hub/internal/onvif"
 	"tomerab.com/cam-hub/internal/onvif/discovery"
 	"tomerab.com/cam-hub/internal/repos"
@@ -125,6 +126,26 @@ func discoverySSE(app *application.Application) http.HandlerFunc {
 			case <-ctx.Done():
 				return
 			}
+		}
+	}
+}
+
+func playground(app *application.Application) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		client, err := dvripclient.New("10.0.0.7", "tomer", "123456")
+		if err != nil {
+			http.Error(w, fmt.Sprintf("error creating client: %s", err.Error()), http.StatusInternalServerError)
+			return
+		}
+		defer client.Close()
+
+		if err := client.Set("Camera.WhiteLight", map[string]any{"WorkMode": "Intelligent"}); err != nil {
+			http.Error(w, fmt.Sprintf("error creating client: %s", err.Error()), http.StatusInternalServerError)
+			return
+		}
+
+		if resp, err := client.Get("Camera.WhiteLight"); err == nil {
+			fmt.Println(resp)
 		}
 	}
 }

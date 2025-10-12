@@ -28,7 +28,7 @@ import (
 )
 
 func main() {
-	if err := godotenv.Load(); err != nil {
+	if err := godotenv.Load("/home/tomerab/VSCProjects/cam-hub/api/.env"); err != nil {
 		panic(err.Error())
 	}
 

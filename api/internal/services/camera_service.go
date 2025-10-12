@@ -4,9 +4,12 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
+	"strings"
 
 	"tomerab.com/cam-hub/internal/api/v1/models"
 	v1 "tomerab.com/cam-hub/internal/contracts/v1"
+	dvripclient "tomerab.com/cam-hub/internal/dvrip"
 	"tomerab.com/cam-hub/internal/onvif"
 	"tomerab.com/cam-hub/internal/onvif/device"
 	"tomerab.com/cam-hub/internal/repos"
@@ -20,6 +23,33 @@ type CameraService struct {
 	CamRepo      repos.CameraRepoIface
 	CamCredsRepo repos.CameraCredsRepoIface
 	Logger       *slog.Logger
+}
+
+func (svc *CameraService) UpairCamera(ctx context.Context, uuid string) error {
+	creds, err := svc.CamCredsRepo.FindOne(ctx, uuid)
+	if err != nil {
+		return err
+	}
+	cam, err := svc.CamRepo.FindOne(ctx, uuid)
+	if err != nil {
+		return err
+	}
+
+	client, err := dvripclient.New(
+		getAddrWithoutPort(cam.Addr),
+		os.Getenv("CAMERA_GLOB_ADMIN_USERNAME"),
+		os.Getenv("CAMERA_GLOB_ADMIN_PASS"))
+	if err != nil {
+		return err
+	}
+
+	client.DelUser(creds.Username)
+
+	return nil
+}
+
+func getAddrWithoutPort(addr string) string {
+	return strings.TrimSuffix(addr, ":")
 }
 
 func (svc *CameraService) connectAndGetDeviceInfo(uuid string, req v1.PairDeviceReq) (*device.GetDeviceInfoDto, error) {
@@ -37,13 +67,23 @@ func (svc *CameraService) connectAndGetDeviceInfo(uuid string, req v1.PairDevice
 	if err != nil {
 		return nil, fmt.Errorf("failed to get device info: %w", err)
 	}
+	if err := svc.tryCreateRootUser(client); err != nil {
+		return nil, err
+	}
 
-	// TODO(tomer): Check failure reason, if critical return err to user.
 	if err := svc.tryCreateUser(client, req); err != nil {
-		svc.Logger.Warn("Failed to create user on device", "error", err, "uuid", uuid)
+		return nil, err
 	}
 
 	return &info, nil
+}
+
+func (svc *CameraService) tryCreateRootUser(client *onvif.OnvifClient) error {
+	return client.CreateUser(device.CreateUserDto{
+		Username:  os.Getenv("CAMERA_GLOB_ADMIN_USERNAME"),
+		Password:  os.Getenv("CAMERA_GLOB_ADMIN_PASS"),
+		UserLevel: UserLvlAdmin,
+	})
 }
 
 func (svc *CameraService) tryCreateUser(client *onvif.OnvifClient, req v1.PairDeviceReq) error {
@@ -103,7 +143,6 @@ func (svc *CameraService) Pair(ctx context.Context, uuid string, req v1.PairDevi
 	}
 
 	camera := svc.buildCameraModel(uuid, req, devInfo)
-
 	err = svc.storeCameraAndCredentials(ctx, camera, uuid, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to store camera data: %w", err)
