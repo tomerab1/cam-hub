@@ -174,9 +174,7 @@ func (svc *CameraService) connectCameraToWifi(addr, ssid, psk string) error {
 	}
 	defer client.Close()
 
-	client.PairWifi(ssid, psk)
-
-	return nil
+	return client.PairWifi(ssid, psk)
 }
 
 func (svc *CameraService) Unpair(ctx context.Context, uuid string) error {
