@@ -12,6 +12,7 @@ import (
 	"tomerab.com/cam-hub/internal/api"
 	"tomerab.com/cam-hub/internal/application"
 	v1 "tomerab.com/cam-hub/internal/contracts/v1"
+	dvripclient "tomerab.com/cam-hub/internal/dvrip"
 	"tomerab.com/cam-hub/internal/onvif"
 	"tomerab.com/cam-hub/internal/onvif/discovery"
 	"tomerab.com/cam-hub/internal/repos"
@@ -110,11 +111,76 @@ func discoverySSE(app *application.Application) http.HandlerFunc {
 		}
 
 		ctx := r.Context()
+		keepAliveTicker := time.NewTicker(time.Second * 20)
+		defer keepAliveTicker.Stop()
+
 		for {
 			select {
 			case evt := <-app.SseChan:
 				data, _ := json.Marshal(evt)
 				fmt.Fprintf(w, "data: %s\n\n", data)
+				flusher.Flush()
+			case <-keepAliveTicker.C:
+				fmt.Fprint(w, ":\n\n")
+				flusher.Flush()
+			case <-ctx.Done():
+				return
+			}
+		}
+	}
+}
+
+func playground(app *application.Application) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		client, err := dvripclient.New("10.0.0.7", "tomer", "123456")
+		if err != nil {
+			http.Error(w, fmt.Sprintf("error creating client: %s", err.Error()), http.StatusInternalServerError)
+			return
+		}
+		defer client.Close()
+
+		if err := client.Set("Camera.WhiteLight", map[string]any{"WorkMode": "Intelligent"}); err != nil {
+			http.Error(w, fmt.Sprintf("error creating client: %s", err.Error()), http.StatusInternalServerError)
+			return
+		}
+
+		if resp, err := client.Get("Camera.WhiteLight"); err == nil {
+			fmt.Println(resp)
+		}
+	}
+}
+
+func alertsSSE(app *application.Application) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Connection", "keep-alive")
+
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			http.Error(w, "streaming unsupported", http.StatusInternalServerError)
+			return
+		}
+
+		ctx := r.Context()
+		uuid := r.PathValue("uuid")
+		if !app.CameraService.CameraExists(ctx, uuid) {
+			http.Error(w, fmt.Sprintf("cameras (%s) does not exist", uuid), http.StatusBadRequest)
+			return
+		}
+
+		subCh := app.PubSub.Subscribe(uuid)
+		defer app.PubSub.Unsubscribe(uuid, subCh)
+		keepAliveTicker := time.NewTicker(time.Second * 10)
+		defer keepAliveTicker.Stop()
+
+		for {
+			select {
+			case msg := <-subCh:
+				fmt.Fprintf(w, "data: %s\n\n", msg)
+				flusher.Flush()
+			case <-keepAliveTicker.C:
+				fmt.Fprint(w, ":\n\n")
 				flusher.Flush()
 			case <-ctx.Done():
 				return

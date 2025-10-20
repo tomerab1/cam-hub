@@ -1,6 +1,7 @@
 package supervisor
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
@@ -8,35 +9,31 @@ import (
 	"sync"
 	"syscall"
 	"time"
-
-	"gopkg.in/lumberjack.v3"
 )
 
 type Supervisor struct {
-	mtx        sync.Mutex
-	procs      map[string]*Proc
-	exitCh     chan ExitEvent
-	ctrlCh     chan CtrlEvent
-	logger     *slog.Logger
-	loggerSink lumberjack.Writer
+	mtx    sync.Mutex
+	procs  map[string]*Proc
+	exitCh chan ExitEvent
+	ctrlCh chan CtrlEvent
+	logger *slog.Logger
 }
 
-func NewSupervisor(maxProcs int, writer lumberjack.Writer) *Supervisor {
+func NewSupervisor(maxProcs int, logger *slog.Logger) *Supervisor {
 	return &Supervisor{
 		mtx:    sync.Mutex{},
 		procs:  make(map[string]*Proc),
 		exitCh: make(chan ExitEvent, maxProcs),
 		ctrlCh: make(chan CtrlEvent, maxProcs),
-		logger: slog.New(slog.NewJSONHandler(writer, &slog.HandlerOptions{
-			Level: slog.LevelDebug,
-		})),
-		loggerSink: writer,
+		logger: logger,
 	}
 }
 
-func (visor *Supervisor) Run() {
+func (visor *Supervisor) Run(ctx context.Context) {
 	for {
 		select {
+		case <-ctx.Done():
+			return
 		case exit := <-visor.exitCh:
 			visor.logger.Info("Process exit",
 				"cam", exit.camID,
@@ -69,10 +66,6 @@ func (visor *Supervisor) GetCameraRevision(camUUID string) (int, error) {
 
 func (visor *Supervisor) Shutdown() {
 	visor.logger.Info("Shutting down")
-	visor.ctrlCh <- CtrlEvent{
-		Kind: CtrlShutdown,
-	}
-
 	for uuid := range visor.procs {
 		visor.Unregister(uuid)
 	}
@@ -90,8 +83,6 @@ func (visor *Supervisor) Register(camUUID string, args Args) {
 
 	cmd := exec.Command("go", args...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	cmd.Stdout = visor.loggerSink
-	cmd.Stderr = visor.loggerSink
 
 	err := cmd.Start()
 	if err != nil {
@@ -120,7 +111,6 @@ func (visor *Supervisor) Register(camUUID string, args Args) {
 			status: cmd.ProcessState.ExitCode(),
 			err:    err,
 		}
-		visor.logger.Info("process exit", "pid", cmd.Process.Pid, "status", cmd.ProcessState.ExitCode())
 
 		if visor.findProc(camUUID) == nil {
 			return

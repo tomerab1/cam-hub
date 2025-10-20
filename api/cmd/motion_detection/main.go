@@ -13,13 +13,16 @@ import (
 	"github.com/joho/godotenv"
 	"gocv.io/x/gocv"
 	"gopkg.in/lumberjack.v3"
+	"tomerab.com/cam-hub/internal/events/rabbitmq"
 	"tomerab.com/cam-hub/internal/motion"
+	objectstorage "tomerab.com/cam-hub/internal/object_storage"
 	"tomerab.com/cam-hub/internal/utils"
 )
 
 var (
 	lastMotionEvent time.Time
 	motionCoolDown  = 10 * time.Second
+	bucketName      = os.Getenv("MINIO_BUCKET_NAME")
 )
 
 func main() {
@@ -70,8 +73,35 @@ func main() {
 		logger.Debug("caught signal, terminating")
 	}, syscall.SIGTERM, syscall.SIGINT)
 	defer cancel()
-	runner := motion.NewRunner(ctx, 8)
 
+	bus, err := rabbitmq.NewBus(os.Getenv("RABBITMQ_ADDR"))
+	if err != nil {
+		panic(err.Error())
+	}
+
+	if err := bus.DeclareQueue("motion.analyze", true, nil); err != nil {
+		panic(err.Error())
+	}
+
+	minioLogger := slog.New(logger.Handler()).With("component", "MinIO")
+	minioClient, err := objectstorage.NewMinIOStore(ctx, minioLogger, false)
+	if err != nil {
+		logger.Error("failed to create MinIO client", "err", err.Error())
+		panic(err.Error())
+	}
+
+	if exists, err := minioClient.BucketExists(bucketName); !exists {
+		if err != nil {
+			minioLogger.Error("bucket exists check failed", "err", err.Error())
+		}
+
+		if err := minioClient.CreateBucket(bucketName); err != nil {
+			minioLogger.Error("bucket creation failed", "err", err.Error())
+			panic(err.Error())
+		}
+	}
+
+	runner := motion.NewRunner(ctx, minioClient, bus, logger, 8)
 	for {
 		select {
 		case <-ctx.Done():
@@ -83,7 +113,8 @@ func main() {
 
 			isMotion, score := det.Detect(&frame)
 			if isMotion && time.Since(lastMotionEvent) > motionCoolDown {
-				lastMotionEvent = time.Now()
+				lastMotionEvent = time.Now().UTC()
+				logger.Info("motion detected posting new job", "motion_time", lastMotionEvent)
 				go runner.PostJob(motion.MotionCtx{
 					UUID:      cameraUUID,
 					Score:     score,

@@ -12,7 +12,7 @@ import (
 	"tomerab.com/cam-hub/internal/api/v1/models"
 )
 
-func makeCamera(uuid string, isPaired bool) *models.Camera {
+func makeCamera(uuid string) *models.Camera {
 	return &models.Camera{
 		UUID:            uuid,
 		CameraName:      "Test Camera",
@@ -21,7 +21,6 @@ func makeCamera(uuid string, isPaired bool) *models.Camera {
 		SerialNumber:    "SN123",
 		HardwareId:      "HW456",
 		Addr:            "192.168.1.100",
-		IsPaired:        isPaired,
 		FirmwareVersion: "1.0.0",
 	}
 }
@@ -47,13 +46,19 @@ func setupCameraRepoTest(t *testing.T) (*PgxCameraRepo, pgxmock.PgxPoolIface, co
 func TestUpsertCamera(t *testing.T) {
 	repo, mock, ctx := setupCameraRepoTest(t)
 
-	t.Run("nil camera should return error", func(t *testing.T) {
+	t.Run("nil camera should panic", func(t *testing.T) {
 		mock.ExpectBegin()
 		tx, err := mock.Begin(ctx)
 		if err != nil {
 			t.Fatalf("failed to create transaction: %v", err)
 		}
 		defer tx.Rollback(ctx)
+
+		defer func() {
+			if r := recover(); r == nil {
+				t.Error("expected panic when camera is nil, got no panic")
+			}
+		}()
 
 		err = repo.UpsertCameraTx(ctx, tx, nil)
 		if err == nil {
@@ -62,7 +67,7 @@ func TestUpsertCamera(t *testing.T) {
 	})
 
 	t.Run("valid camera should succeed", func(t *testing.T) {
-		camera := makeCamera("1", true)
+		camera := makeCamera("1")
 		mock.ExpectBegin()
 
 		mock.ExpectExec(`INSERT INTO cameras`).
@@ -75,7 +80,6 @@ func TestUpsertCamera(t *testing.T) {
 				camera.SerialNumber,
 				camera.HardwareId,
 				camera.Addr,
-				camera.IsPaired,
 			).
 			WillReturnResult(pgxmock.NewResult("INSERT", 1))
 
@@ -96,7 +100,7 @@ func TestUpsertCamera(t *testing.T) {
 	})
 
 	t.Run("database error should be returned", func(t *testing.T) {
-		camera := makeCamera("1", true)
+		camera := makeCamera("1")
 
 		mock.ExpectBegin()
 		mock.ExpectExec(`INSERT INTO cameras`).
@@ -109,7 +113,6 @@ func TestUpsertCamera(t *testing.T) {
 				camera.SerialNumber,
 				camera.HardwareId,
 				camera.Addr,
-				camera.IsPaired,
 			).
 			WillReturnError(errors.New("database connection failed"))
 
@@ -146,7 +149,7 @@ func TestFindExistingPaired(t *testing.T) {
 	t.Run("query returns row - should return true", func(t *testing.T) {
 		uuids := []string{"1"}
 		b := mock.ExpectBatch()
-		b.ExpectQuery(`SELECT id\s+FROM cameras\s+WHERE id = \$1 and ispaired = true`).
+		b.ExpectQuery(`SELECT id\s+FROM cameras\s+WHERE id = \$1`).
 			WithArgs("1").
 			WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow("1"))
 
@@ -168,7 +171,7 @@ func TestFindExistingPaired(t *testing.T) {
 	t.Run("query returns no rows - should return false", func(t *testing.T) {
 		uuids := []string{"1"}
 		b := mock.ExpectBatch()
-		b.ExpectQuery(`SELECT id\s+FROM cameras\s+WHERE id = \$1 and ispaired = true`).
+		b.ExpectQuery(`SELECT id\s+FROM cameras\s+WHERE id = \$1`).
 			WithArgs("1").
 			WillReturnError(pgx.ErrNoRows)
 
@@ -191,15 +194,15 @@ func TestFindExistingPaired(t *testing.T) {
 		uuids := []string{"exists", "missing", "exists-too"}
 
 		b := mock.ExpectBatch()
-		b.ExpectQuery(`SELECT id\s+FROM cameras\s+WHERE id = \$1 and ispaired = true`).
+		b.ExpectQuery(`SELECT id\s+FROM cameras\s+WHERE id = \$1`).
 			WithArgs("exists").
 			WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow("exists"))
 
-		b.ExpectQuery(`SELECT id\s+FROM cameras\s+WHERE id = \$1 and ispaired = true`).
+		b.ExpectQuery(`SELECT id\s+FROM cameras\s+WHERE id = \$1`).
 			WithArgs("missing").
 			WillReturnError(pgx.ErrNoRows)
 
-		b.ExpectQuery(`SELECT id\s+FROM cameras\s+WHERE id = \$1 and ispaired = true`).
+		b.ExpectQuery(`SELECT id\s+FROM cameras\s+WHERE id = \$1`).
 			WithArgs("exists-too").
 			WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow("exists-too"))
 
@@ -222,7 +225,7 @@ func TestFindExistingPaired(t *testing.T) {
 		uuids := []string{"camera-1"}
 
 		b := mock.ExpectBatch()
-		b.ExpectQuery(`SELECT id\s+FROM cameras\s+WHERE id = \$1 and ispaired = true`).
+		b.ExpectQuery(`SELECT id\s+FROM cameras\s+WHERE id = \$1`).
 			WithArgs("camera-1").
 			WillReturnError(errors.New("database connection failed"))
 
@@ -251,19 +254,19 @@ func TestCamerasFindOne(t *testing.T) {
 	repo, mock, ctx := setupCameraRepoTest(t)
 
 	t.Run("camera exists", func(t *testing.T) {
-		cam := makeCamera("1", true)
+		cam := makeCamera("1")
 		mock.ExpectQuery(`SELECT.*FROM cameras.*WHERE id = \$1`).
 			WithArgs(cam.UUID).
 			WillReturnRows(pgxmock.NewRows([]string{
 				"id",
-				"name",
+				"camera_name",
 				"manufacturer",
 				"model",
-				"firmwareversion",
-				"serialnumber",
-				"hardwareid",
+				"firmware_version",
+				"serial_number",
+				"hardware_id",
 				"addr",
-				"ispaired"}).AddRow(cam.UUID,
+			}).AddRow(cam.UUID,
 				cam.CameraName,
 				cam.Manufacturer,
 				cam.Model,
@@ -271,7 +274,7 @@ func TestCamerasFindOne(t *testing.T) {
 				cam.SerialNumber,
 				cam.HardwareId,
 				cam.Addr,
-				cam.IsPaired))
+			))
 
 		got, err := repo.FindOne(ctx, "1")
 		if err != nil {
@@ -338,7 +341,7 @@ func TestSave(t *testing.T) {
 	repo, mock, ctx := setupCameraRepoTest(t)
 
 	t.Run("successful save", func(t *testing.T) {
-		camera := makeCamera("1", false)
+		camera := makeCamera("1")
 
 		mock.ExpectExec(`UPDATE cameras\s+SET.*WHERE id = \$1`).
 			WithArgs(
@@ -350,7 +353,6 @@ func TestSave(t *testing.T) {
 				camera.SerialNumber,
 				camera.HardwareId,
 				camera.Addr,
-				camera.IsPaired,
 			).
 			WillReturnResult(pgxmock.NewResult("UPDATE", 1))
 
@@ -365,7 +367,7 @@ func TestSave(t *testing.T) {
 	})
 
 	t.Run("camera not found - no rows affected", func(t *testing.T) {
-		camera := makeCamera("1", false)
+		camera := makeCamera("1")
 
 		mock.ExpectExec(`UPDATE cameras\s+SET.*WHERE id = \$1`).
 			WithArgs(
@@ -377,7 +379,6 @@ func TestSave(t *testing.T) {
 				camera.SerialNumber,
 				camera.HardwareId,
 				camera.Addr,
-				camera.IsPaired,
 			).
 			WillReturnResult(pgxmock.NewResult("UPDATE", 0))
 
@@ -408,7 +409,7 @@ func TestSave(t *testing.T) {
 	})
 
 	t.Run("multiple rows affected - unexpected", func(t *testing.T) {
-		camera := makeCamera("1", false)
+		camera := makeCamera("1")
 
 		mock.ExpectExec(`UPDATE cameras\s+SET.*WHERE id = \$1`).
 			WithArgs(
@@ -420,7 +421,6 @@ func TestSave(t *testing.T) {
 				camera.SerialNumber,
 				camera.HardwareId,
 				camera.Addr,
-				camera.IsPaired,
 			).
 			WillReturnResult(pgxmock.NewResult("UPDATE", 2))
 

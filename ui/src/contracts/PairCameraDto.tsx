@@ -3,4 +3,6 @@ export interface PairCameraDto {
 	camera_name: string;
 	username: string;
 	password: string;
+	ssid: string;
+	psk: string;
 }

@@ -1,2 +1,5 @@
 /recordings/*
 /log/
+/models/
+.vscode
+payload.json

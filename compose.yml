@@ -2,11 +2,11 @@ services:
   mediamtx-server:
     build: ./infra/mediamtx
     ports:
-      - "8554:8554"         # RTSP (server)
-      - "8889:8889"         # WebRTC (HTTP)
-      - "8189:8189/udp"     # WebRTC ICE/UDP
+      - "8554:8554" # RTSP (server)
+      - "8889:8889" # WebRTC (HTTP)
+      - "8189:8189/udp" # WebRTC ICE/UDP
       - "8890:8890/udp"
-      - "9997:9997"         # API 
+      - "9997:9997" # API
     volumes:
       - ./infra/mediamtx/mediamtx.yml:/mediamtx.yml:ro
       - ./recordings:/recordings # Mount the recordings dir
@@ -50,8 +50,33 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
-  
+  ovms:
+    image: openvino/model_server:latest
+    ports:
+      - "9000:9000" # gRPC
+      - "9001:9001" # REST
+    command: >
+      --port 9000
+      --rest_port 9001
+      --config_path /models/config.json
+    volumes:
+      - ./models/intel/person-detection-retail-0013/FP16:/models/person-detection-retail-0013/1:ro
+      - ./models/config.json:/models/config.json:ro
+    restart: unless-stopped
+  minio:
+    image: minio/minio:latest
+    env_file:
+      - ./api/.env
+    volumes:
+      - minio:/data
+    ports:
+      - "9002:9000"
+      - "9003:9001"
+    command: server /data --console-address ":9001"
+    restart: unless-stopped
+
 volumes:
   pgdata:
   redisdata:
   rabbitmqdata:
+  minio:

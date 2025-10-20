@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"log/slog"
 	"os"
 	"syscall"
 
@@ -37,7 +38,11 @@ func main() {
 		panic(err.Error())
 	}
 
-	supervisor := visor.NewSupervisor(10, fileHandler)
+	logger := slog.New(slog.NewJSONHandler(fileHandler, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+	}))
+
+	supervisor := visor.NewSupervisor(10, logger)
 	onShutdown := func() {
 		supervisor.Shutdown()
 		_ = bus.Close()
@@ -84,9 +89,9 @@ func main() {
 	})
 
 	bus.Consume(ctx, "supervisor.unpair", "supervisor", func(ctx context.Context, m events.Message) events.AckAction {
-		var ev v1.CameraUnpairEvent
+		var ev v1.CameraUnpairedEvent
 		if err := json.Unmarshal(m.Body, &ev); err != nil {
-			log.Printf("Falied to parse message: %v", err)
+			logger.Warn("supervisor.upair faield to parse message", "err", err.Error())
 			return events.NackRequeue
 		}
 
@@ -98,5 +103,5 @@ func main() {
 		return events.Ack
 	})
 
-	supervisor.Run()
+	supervisor.Run(ctx)
 }

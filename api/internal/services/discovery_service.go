@@ -52,6 +52,7 @@ func (svc *DiscoveryService) InitJobs(ctx context.Context) error {
 
 func (svc *DiscoveryService) Discover(ctx context.Context) {
 	matches := onvif.DiscoverNewCameras(ctx, svc.Logger)
+	svc.Logger.Info("found matches", "matches", matches)
 
 	for _, match := range matches.Matches {
 		status := svc.hydrateDb(ctx, match.UUID, match.Xaddr)

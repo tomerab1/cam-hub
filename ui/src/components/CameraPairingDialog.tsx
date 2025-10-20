@@ -86,6 +86,26 @@ export default function CameraPairingDialog({
 							autoFocus
 							required
 							margin="dense"
+							name="wifi_name"
+							label="wifi name"
+							type="text"
+							fullWidth
+							variant="standard"
+						/>
+						<TextField
+							autoFocus
+							required
+							margin="dense"
+							name="wifi_password"
+							label="wifi Password"
+							type="password"
+							fullWidth
+							variant="standard"
+						/>
+						<TextField
+							autoFocus
+							required
+							margin="dense"
 							name="camera_name"
 							label="Camera Name"
 							type="text"

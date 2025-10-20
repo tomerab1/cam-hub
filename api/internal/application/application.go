@@ -9,6 +9,7 @@ import (
 	"gopkg.in/lumberjack.v3"
 	v1 "tomerab.com/cam-hub/internal/contracts/v1"
 	"tomerab.com/cam-hub/internal/events"
+	inmemory "tomerab.com/cam-hub/internal/events/in_memory"
 	"tomerab.com/cam-hub/internal/mtxapi"
 	"tomerab.com/cam-hub/internal/services"
 )
@@ -22,6 +23,7 @@ type Application struct {
 	PtzService       *services.PtzService
 	MtxClient        *mtxapi.MtxClient
 	Bus              events.BusIface
+	PubSub           *inmemory.InMemoryPubSub
 	SseChan          chan v1.DiscoveryEvent
 	LogSink          lumberjack.Writer
 }
