@@ -38,17 +38,16 @@ func (repo *PgxCameraRepo) Begin(ctx context.Context) (pgx.Tx, error) {
 func (repo *PgxCameraRepo) UpsertCameraTx(ctx context.Context, tx pgx.Tx, cam *models.Camera) error {
 	_, err := tx.Exec(ctx, `
 		INSERT INTO cameras (
-			id, name, manufacturer, model, firmwareVersion, serialNumber, hardwareId, addr, isPaired
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+			id, name, manufacturer, model, firmware_version, serial_number, hardware_id, addr
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
 		ON CONFLICT (id) DO UPDATE SET
 			name = EXCLUDED.name,
 			manufacturer = EXCLUDED.manufacturer,
 			model = EXCLUDED.model,
-			firmwareVersion = EXCLUDED.firmwareVersion,
-			serialNumber = EXCLUDED.serialNumber,
-			hardwareId = EXCLUDED.hardwareId,
-			addr = EXCLUDED.addr,
-			isPaired = EXCLUDED.isPaired
+			firmware_version = EXCLUDED.firmware_version,
+			serial_number = EXCLUDED.serial_number,
+			hardware_id = EXCLUDED.hardware_id,
+			addr = EXCLUDED.addr
 	`,
 		cam.UUID,
 		cam.CameraName,
@@ -58,7 +57,6 @@ func (repo *PgxCameraRepo) UpsertCameraTx(ctx context.Context, tx pgx.Tx, cam *m
 		cam.SerialNumber,
 		cam.HardwareId,
 		cam.Addr,
-		cam.IsPaired,
 	)
 
 	return err
@@ -67,17 +65,16 @@ func (repo *PgxCameraRepo) UpsertCameraTx(ctx context.Context, tx pgx.Tx, cam *m
 func (repo *PgxCameraRepo) UpsertCamera(ctx context.Context, cam *models.Camera) error {
 	_, err := repo.DB.Exec(ctx, `
 		INSERT INTO cameras (
-			id, name, manufacturer, model, firmwareVersion, serialNumber, hardwareId, addr, isPaired
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+			id, name, manufacturer, model, firmware_version, serial_number, hardware_id, addr
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
 		ON CONFLICT (id) DO UPDATE SET
 			name = EXCLUDED.name,
 			manufacturer = EXCLUDED.manufacturer,
 			model = EXCLUDED.model,
-			firmwareVersion = EXCLUDED.firmwareVersion,
-			serialNumber = EXCLUDED.serialNumber,
-			hardwareId = EXCLUDED.hardwareId,
-			addr = EXCLUDED.addr,
-			isPaired = EXCLUDED.isPaired
+			firmware_version = EXCLUDED.firmware_version,
+			serial_number = EXCLUDED.serial_number,
+			hardwareId = EXCLUDED.hardware_id,
+			addr = EXCLUDED.addr
 	`,
 		cam.UUID,
 		cam.CameraName,
@@ -87,7 +84,6 @@ func (repo *PgxCameraRepo) UpsertCamera(ctx context.Context, cam *models.Camera)
 		cam.SerialNumber,
 		cam.HardwareId,
 		cam.Addr,
-		cam.IsPaired,
 	)
 
 	return err
@@ -99,7 +95,7 @@ func (repo *PgxCameraRepo) FindExistingPaired(ctx context.Context, uuids []strin
 		// Get only rows that exists in the db and are paired
 		batch.Queue(`SELECT id
 					 FROM cameras
-					 WHERE id = $1 and ispaired = true
+					 WHERE id = $1
 		`, uuid)
 	}
 
@@ -131,11 +127,10 @@ func (repo *PgxCameraRepo) FindOne(ctx context.Context, uuid string) (*models.Ca
 													name,
 													manufacturer,
 													model,
-													firmwareversion,
-													serialnumber,
-													hardwareid,
-													addr,
-													ispaired
+													firmware_version,
+													serial_number,
+													hardware_id,
+													addr
 												FROM cameras
 												WHERE id = $1`, uuid)
 
@@ -148,14 +143,13 @@ func (repo *PgxCameraRepo) Save(ctx context.Context, cam *models.Camera) error {
 			name = $2,
 			manufacturer = $3,
 			model = $4,
-			firmwareversion = $5,
-			serialnumber = $6,
-			hardwareid = $7,
-			addr = $8,
-			ispaired = $9
+			firmware_version = $5,
+			serial_number = $6,
+			hardware_id = $7,
+			addr = $8
 		WHERE id = $1
 	`, cam.UUID, cam.CameraName, cam.Manufacturer, cam.Model, cam.FirmwareVersion, cam.SerialNumber,
-		cam.HardwareId, cam.Addr, cam.IsPaired)
+		cam.HardwareId, cam.Addr)
 
 	if tag.RowsAffected() != 1 {
 		return fmt.Errorf("save failed: no rows were affected (id=%s)", cam.UUID)
@@ -181,11 +175,10 @@ func (repo *PgxCameraRepo) FindMany(ctx context.Context, offset, limit int) ([]*
 													name,
 													manufacturer,
 													model,
-													firmwareversion,
-													serialnumber,
-													hardwareid,
-													addr,
-													ispaired
+													firmware_version,
+													serial_number,
+													hardware_id,
+													addr
 												FROM cameras
 												LIMIT $1 OFFSET $2
 												`, limit, offset)
@@ -196,7 +189,6 @@ func (repo *PgxCameraRepo) FindAllUUIDS(ctx context.Context) ([]string, error) {
 	var uuids []string
 	err := pgxscan.Select(ctx, repo.DB, &uuids, `SELECT
 													id FROM cameras
-													where ispaired = true
 												`)
 	return uuids, err
 }

@@ -36,6 +36,7 @@ type networkInfo struct {
 
 func New(camAddr, username, pass string) (*DvripClient, error) {
 	var cli DvripClient
+	fmt.Println(camAddr, username, pass)
 	if err := cli.client.Dial(fmt.Sprintf(dialTemplate, username, pass, camAddr)); err != nil {
 		_ = cli.client.Close()
 		return nil, fmt.Errorf("dial: %w", err)

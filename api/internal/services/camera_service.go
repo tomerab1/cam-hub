@@ -68,11 +68,11 @@ func (svc *CameraService) connectAndGetDeviceInfo(req v1.PairDeviceReq) (*device
 		return nil, fmt.Errorf("failed to get device info: %w", err)
 	}
 	if err := svc.tryCreateRootUser(client); err != nil {
-		return nil, err
+		svc.Logger.Debug("onvif err", "err", err)
 	}
 
 	if err := svc.tryCreateUser(client, req); err != nil {
-		return nil, err
+		svc.Logger.Debug("onvif err", "err", err)
 	}
 
 	return &info, nil
@@ -104,7 +104,6 @@ func (svc *CameraService) buildCameraModel(uuid string, req v1.PairDeviceReq, in
 		Manufacturer:    info.Manufacturer,
 		FirmwareVersion: info.FirmwareVersion,
 		SerialNumber:    info.SerialNumber,
-		IsPaired:        true,
 	}
 }
 
@@ -148,8 +147,36 @@ func (svc *CameraService) Pair(ctx context.Context, uuid string, req v1.PairDevi
 		return nil, fmt.Errorf("failed to store camera data: %w", err)
 	}
 
+	if err := svc.connectCameraToWifi(
+		req.Addr,
+		req.WifiName,
+		req.WifiPassword,
+	); err != nil {
+		return nil, err
+	}
+
 	svc.Logger.Info("Camera paired successfully", "uuid", uuid, "addr", req.Addr)
 	return camera, nil
+}
+
+func (svc *CameraService) connectCameraToWifi(addr, ssid, psk string) error {
+	parts := strings.Split(addr, ":")
+	addrWithoutPort := parts[0]
+
+	client, err := dvripclient.New(
+		addrWithoutPort,
+		os.Getenv("CAMERA_GLOB_ADMIN_USERNAME"),
+		os.Getenv("CAMERA_GLOB_ADMIN_PASS"),
+	)
+
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+
+	client.PairWifi(ssid, psk)
+
+	return nil
 }
 
 func (svc *CameraService) Unpair(ctx context.Context, uuid string) error {
