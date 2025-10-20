@@ -52,7 +52,7 @@ func getAddrWithoutPort(addr string) string {
 	return strings.TrimSuffix(addr, ":")
 }
 
-func (svc *CameraService) connectAndGetDeviceInfo(uuid string, req v1.PairDeviceReq) (*device.GetDeviceInfoDto, error) {
+func (svc *CameraService) connectAndGetDeviceInfo(req v1.PairDeviceReq) (*device.GetDeviceInfoDto, error) {
 	client, err := onvif.NewOnvifClient(onvif.OnvifClientParams{
 		Xaddr:    req.Addr,
 		Username: req.Username,
@@ -136,7 +136,7 @@ func (svc *CameraService) storeCameraAndCredentials(ctx context.Context, camera 
 }
 
 func (svc *CameraService) Pair(ctx context.Context, uuid string, req v1.PairDeviceReq) (*models.Camera, error) {
-	devInfo, err := svc.connectAndGetDeviceInfo(uuid, req)
+	devInfo, err := svc.connectAndGetDeviceInfo(req)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to device: %w", err)
@@ -158,8 +158,25 @@ func (svc *CameraService) Unpair(ctx context.Context, uuid string) error {
 		return err
 	}
 
-	cam.IsPaired = false
-	return svc.CamRepo.Save(ctx, cam)
+	dvripClient, err := dvripclient.New(
+		cam.Addr,
+		os.Getenv("CAMERA_GLOB_ADMIN_USERNAME"),
+		os.Getenv("CAMERA_GLOB_ADMIN_PASS"))
+	if err != nil {
+		return err
+	}
+	defer dvripClient.Close()
+
+	creds, err := svc.CamCredsRepo.FindOne(ctx, uuid)
+	if err != nil {
+		return err
+	}
+
+	if err := dvripClient.DelUser(creds.Username); err != nil {
+		return err
+	}
+
+	return svc.CamRepo.Delete(ctx, uuid)
 }
 
 func (svc *CameraService) GetCameras(ctx context.Context, offset, limit int) ([]*models.Camera, error) {
