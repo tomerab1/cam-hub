@@ -1,5 +1,7 @@
 import { Box, Card, Typography, alpha, CardMedia, Button } from "@mui/material";
 import { useNavigate } from "react-router-dom";
+import ClearIcon from "@mui/icons-material/Clear";
+import { useState } from "react";
 
 type Status = "online" | "offline";
 
@@ -13,11 +15,34 @@ type CameraCardProps = {
 export function CameraCard({ id, status, imgUri, location }: CameraCardProps) {
 	const navigate = useNavigate();
 	const image = imgUri ?? "/assets/default_camera.jpg";
+	const [err, setError] = useState<string | null>(null);
+
+	const unpairCamera = async () => {
+		try {
+			setError(null);
+			const res = await fetch(
+				`http://localhost:5555/api/v1/cameras/${id}/pair`,
+				{ method: "DELETE" }
+			);
+			if (!res.ok) {
+				throw new Error(`HTTP ${res.status}`);
+			}
+			navigate(0);
+		} catch (e) {
+			console.error(e);
+			if (e instanceof Error) {
+				setError(e.message ?? "fetch failed");
+			} else {
+				setError("Unknown error");
+			}
+		}
+	};
 
 	return (
 		<Card
 			elevation={1}
 			sx={{
+				position: "relative",
 				borderRadius: 3,
 				minWidth: 60,
 				maxWidth: 300,
@@ -31,6 +56,22 @@ export function CameraCard({ id, status, imgUri, location }: CameraCardProps) {
 				},
 			}}
 		>
+			<Button
+				variant="text"
+				size="large"
+				sx={{
+					backgroundColor: "transparent",
+					color: "black",
+					border: "none",
+					position: "absolute",
+					padding: 0,
+					marginTop: "5px",
+					zIndex: 1,
+					right: 0,
+				}}
+				endIcon={<ClearIcon />}
+				onClick={unpairCamera}
+			></Button>
 			<CardMedia
 				component="img"
 				image={image}

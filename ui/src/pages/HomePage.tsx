@@ -166,7 +166,7 @@ export default function HomePage() {
 								id={cam.uuid}
 								imgUri="/assets/backyard_camera.jpg"
 								location={cam.camera_name || cam.uuid}
-								status={cam.is_paired ? "online" : "offline"}
+								status={"online"}
 							/>
 						))}
 				</Box>

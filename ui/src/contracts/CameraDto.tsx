@@ -7,5 +7,4 @@ export interface CameraDto {
 	serial_number: string;
 	hardware_id: string;
 	addr: string;
-	is_paired: boolean;
 }
