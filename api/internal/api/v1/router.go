@@ -19,7 +19,7 @@ func LoadRoutes(app *application.Application) *chi.Mux {
 		rt.Delete("/{uuid}/stream", deleteCameraStream(app))
 		rt.Get("/", getCameras(app))
 		rt.Post("/{uuid}/pair", pairCamera(app))
-		rt.Patch("/{uuid}/pair", unpairCamera(app))
+		rt.Delete("/{uuid}/pair", unpairCamera(app))
 		rt.Post("/{uuid}/ptz/move", moveCamera(app))
 	})
 

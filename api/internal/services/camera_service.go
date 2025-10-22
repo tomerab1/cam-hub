@@ -183,8 +183,9 @@ func (svc *CameraService) Unpair(ctx context.Context, uuid string) error {
 		return err
 	}
 
+	camAddrWithoutPort := strings.Split(cam.Addr, ":")[0]
 	dvripClient, err := dvripclient.New(
-		cam.Addr,
+		camAddrWithoutPort,
 		os.Getenv("CAMERA_GLOB_ADMIN_USERNAME"),
 		os.Getenv("CAMERA_GLOB_ADMIN_PASS"))
 	if err != nil {
@@ -200,6 +201,8 @@ func (svc *CameraService) Unpair(ctx context.Context, uuid string) error {
 	if err := dvripClient.DelUser(creds.Username); err != nil {
 		return err
 	}
+
+	// Todo(tomer): Evict the cache, delete from supervisor via message passing, delete from mediamtx
 
 	return svc.CamRepo.Delete(ctx, uuid)
 }
