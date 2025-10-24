@@ -116,6 +116,7 @@ func main() {
 	if err := bus.DeclareQueue("motion.detections", true, nil); err != nil {
 		panic(err.Error())
 	}
+	inMemPubSub := inmemory.NewInMemoryPubSub()
 
 	app := &application.Application{
 		Logger:           appLogger,
@@ -127,6 +128,9 @@ func main() {
 		CameraService: &services.CameraService{
 			CamRepo:      camRepo,
 			CamCredsRepo: credsRepo,
+			Rdms:         dscSvc.Rdb,
+			Bus:          bus,
+			InMemCache:   inMemPubSub,
 			Logger:       cameraServiceLogger,
 		},
 		PtzService: &services.PtzService{
@@ -143,7 +147,7 @@ func main() {
 			HttpClient:   &httpClient,
 		},
 		Bus:    bus,
-		PubSub: inmemory.NewInMemoryPubSub(),
+		PubSub: inMemPubSub,
 	}
 
 	app.Bus.Consume(rootCtx, "motion.detections", "", func(ctx context.Context, m events.Message) events.AckAction {

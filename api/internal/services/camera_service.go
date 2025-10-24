@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -10,6 +11,8 @@ import (
 	"tomerab.com/cam-hub/internal/api/v1/models"
 	v1 "tomerab.com/cam-hub/internal/contracts/v1"
 	dvripclient "tomerab.com/cam-hub/internal/dvrip"
+	"tomerab.com/cam-hub/internal/events"
+	inmemory "tomerab.com/cam-hub/internal/events/in_memory"
 	"tomerab.com/cam-hub/internal/onvif"
 	"tomerab.com/cam-hub/internal/onvif/device"
 	"tomerab.com/cam-hub/internal/repos"
@@ -22,6 +25,9 @@ const (
 type CameraService struct {
 	CamRepo      repos.CameraRepoIface
 	CamCredsRepo repos.CameraCredsRepoIface
+	Rdms         repos.RedisIface
+	InMemCache   *inmemory.InMemoryPubSub
+	Bus          events.BusIface
 	Logger       *slog.Logger
 }
 
@@ -43,9 +49,7 @@ func (svc *CameraService) UpairCamera(ctx context.Context, uuid string) error {
 		return err
 	}
 
-	client.DelUser(creds.Username)
-
-	return nil
+	return client.DelUser(creds.Username)
 }
 
 func getAddrWithoutPort(addr string) string {
@@ -202,7 +206,34 @@ func (svc *CameraService) Unpair(ctx context.Context, uuid string) error {
 		return err
 	}
 
-	// Todo(tomer): Evict the cache, delete from supervisor via message passing, delete from mediamtx
+	if err := svc.purgeCameraFromDataSources(ctx, uuid); err != nil {
+		return err
+	}
+
+	unpairBytes, err := json.Marshal(v1.UnpairDeviceReq{
+		UUID: uuid,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to seralize json: %w", err)
+	}
+
+	if err := svc.Bus.Publish(
+		ctx,
+		"",
+		os.Getenv("RABBITMQ_UNPAIR_KEY"),
+		unpairBytes,
+		nil); err != nil {
+		return err
+	}
+
+	return dvripClient.Reboot()
+}
+
+func (svc *CameraService) purgeCameraFromDataSources(ctx context.Context, uuid string) error {
+	svc.InMemCache.Purge(uuid)
+	if err := svc.Rdms.Del(ctx, fmt.Sprintf("cam:%s", uuid)); err != nil {
+		return fmt.Errorf("failed to delete from redis: %w", err)
+	}
 
 	return svc.CamRepo.Delete(ctx, uuid)
 }
