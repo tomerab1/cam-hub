@@ -101,6 +101,7 @@ func (visor *Supervisor) Register(camUUID string, args Args) {
 	visor.procs[camUUID] = &Proc{
 		procArgs: args,
 		cmd:      cmd,
+		Version:  1,
 	}
 
 	go func() {

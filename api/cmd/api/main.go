@@ -91,15 +91,17 @@ func main() {
 	ptzRepo := repos.NewPgxPtzTokenRepo(dbpool)
 
 	sseChan := make(chan v1.DiscoveryEvent, 24)
+	camsEventProxyChan := make(chan v1.CameraProxyEvent, 8)
 	dscSvc := &services.DiscoveryService{
 		Rdb: &repos.RedisRepo{
 			Rdb:    rdb,
 			Logger: redisRepoLogger,
 		},
-		CamerasRepo: camRepo,
-		Sched:       sched,
-		Logger:      discoveryServiceLogger,
-		SseChan:     sseChan,
+		CamerasRepo:      camRepo,
+		Sched:            sched,
+		Logger:           discoveryServiceLogger,
+		SseChan:          sseChan,
+		CamsProxyEventCh: camsEventProxyChan,
 	}
 	err = dscSvc.InitJobs(rootCtx)
 	if err != nil {
@@ -118,20 +120,29 @@ func main() {
 	}
 	inMemPubSub := inmemory.NewInMemoryPubSub()
 
+	mtxClient := &mtxapi.MtxClient{
+		Logger:       mtxServiceLogger,
+		CamRepo:      camRepo,
+		CamCredsRepo: credsRepo,
+		HttpClient:   &httpClient,
+	}
+
 	app := &application.Application{
-		Logger:           appLogger,
-		LogSink:          fileHandler,
-		DB:               dbpool,
-		DiscoveryService: dscSvc,
-		SseChan:          sseChan,
-		HttpClient:       &httpClient,
+		Logger:             appLogger,
+		LogSink:            fileHandler,
+		DB:                 dbpool,
+		DiscoveryService:   dscSvc,
+		SseChan:            sseChan,
+		CamsEventProxyChan: camsEventProxyChan,
+		HttpClient:         &httpClient,
 		CameraService: &services.CameraService{
-			CamRepo:      camRepo,
-			CamCredsRepo: credsRepo,
-			Rdms:         dscSvc.Rdb,
-			Bus:          bus,
-			InMemCache:   inMemPubSub,
-			Logger:       cameraServiceLogger,
+			CamRepo:            camRepo,
+			CamCredsRepo:       credsRepo,
+			Rdms:               dscSvc.Rdb,
+			MtxClient:          mtxClient,
+			InMemCache:         inMemPubSub,
+			CamsEventProxyChan: camsEventProxyChan,
+			Logger:             cameraServiceLogger,
 		},
 		PtzService: &services.PtzService{
 			CamRepo:      camRepo,
@@ -140,14 +151,9 @@ func main() {
 			Rdb:          dscSvc.Rdb,
 			Logger:       ptzServiceLogger,
 		},
-		MtxClient: &mtxapi.MtxClient{
-			Logger:       mtxServiceLogger,
-			CamRepo:      camRepo,
-			CamCredsRepo: credsRepo,
-			HttpClient:   &httpClient,
-		},
-		Bus:    bus,
-		PubSub: inMemPubSub,
+		MtxClient: mtxClient,
+		Bus:       bus,
+		PubSub:    inMemPubSub,
 	}
 
 	app.Bus.Consume(rootCtx, "motion.detections", "", func(ctx context.Context, m events.Message) events.AckAction {
@@ -160,6 +166,8 @@ func main() {
 		app.PubSub.Broadcast(uuid, m.Body)
 		return events.Ack
 	})
+
+	app.OnStartup(rootCtx)
 
 	srv := http.Server{
 		Addr:         os.Getenv("SERVER_ADDR"),

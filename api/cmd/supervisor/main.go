@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"log/slog"
 	"os"
 	"syscall"
@@ -61,7 +60,6 @@ func main() {
 	bus.Consume(ctx, PairKey, "supervisor", func(ctx context.Context, m events.Message) events.AckAction {
 		var ev v1.CameraPairedEvent
 		if err := json.Unmarshal(m.Body, &ev); err != nil {
-			log.Printf("Falied to parse message: %v", err)
 			return events.NackRequeue
 		}
 
@@ -93,11 +91,10 @@ func main() {
 		return events.Ack
 	})
 
-	bus.Consume(ctx, "supervisor.unpair", "supervisor", func(ctx context.Context, m events.Message) events.AckAction {
+	bus.Consume(ctx, UnpairKey, "supervisor", func(ctx context.Context, m events.Message) events.AckAction {
 		var ev v1.CameraUnpairedEvent
 		if err := json.Unmarshal(m.Body, &ev); err != nil {
-			logger.Warn("supervisor.upair faield to parse message", "err", err.Error())
-			return events.NackRequeue
+			return events.NackDiscard
 		}
 
 		supervisor.NotifyCtrl(visor.CtrlEvent{

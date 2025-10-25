@@ -7,9 +7,11 @@ import (
 	"os"
 	"time"
 
+	"github.com/georgysavva/scany/v2/pgxscan"
 	"github.com/go-co-op/gocron/v2"
 	"github.com/redis/go-redis/v9"
 	v1 "tomerab.com/cam-hub/internal/contracts/v1"
+	"tomerab.com/cam-hub/internal/mtxapi"
 	"tomerab.com/cam-hub/internal/onvif"
 	"tomerab.com/cam-hub/internal/repos"
 )
@@ -22,11 +24,13 @@ const (
 )
 
 type DiscoveryService struct {
-	Rdb         repos.RedisIface
-	CamerasRepo repos.CameraRepoIface
-	Sched       gocron.Scheduler
-	Logger      *slog.Logger
-	SseChan     chan v1.DiscoveryEvent
+	Rdb              repos.RedisIface
+	CamerasRepo      repos.CameraRepoIface
+	MtxClient        *mtxapi.MtxClient
+	Sched            gocron.Scheduler
+	Logger           *slog.Logger
+	SseChan          chan v1.DiscoveryEvent
+	CamsProxyEventCh chan v1.CameraProxyEvent
 }
 
 func (svc *DiscoveryService) InitJobs(ctx context.Context) error {
@@ -55,7 +59,7 @@ func (svc *DiscoveryService) Discover(ctx context.Context) {
 	svc.Logger.Info("found matches", "matches", matches)
 
 	for _, match := range matches.Matches {
-		status := svc.hydrateDb(ctx, match.UUID, match.Xaddr)
+		status, version := svc.hydrateDb(ctx, match.UUID, match.Xaddr)
 		if err := svc.updateCache(ctx, match.UUID, match.Xaddr); err != nil {
 			svc.Logger.Error(err.Error())
 		}
@@ -68,6 +72,20 @@ func (svc *DiscoveryService) Discover(ctx context.Context) {
 				Addr: match.Xaddr,
 				At:   time.Now(),
 			}
+
+			streamUrl, err := svc.MtxClient.Publish(ctx, match.UUID)
+			if err != nil {
+				svc.Logger.Warn("failed to publish stream to mediamtx", "newDevice", true, "err", err)
+				continue
+			}
+
+			svc.CamsProxyEventCh <- v1.CameraProxyEvent{
+				CameraPairedEvent: &v1.CameraPairedEvent{
+					UUID:      match.UUID,
+					StreamUrl: streamUrl,
+					Revision:  version,
+				},
+			}
 		case hydrateNewDevice:
 			svc.SseChan <- v1.DiscoveryEvent{
 				Type: "device_new",
@@ -76,6 +94,19 @@ func (svc *DiscoveryService) Discover(ctx context.Context) {
 				At:   time.Now(),
 			}
 		default:
+			streamUrl, err := svc.MtxClient.Publish(ctx, match.UUID)
+			if err != nil {
+				svc.Logger.Warn("failed to publish stream to mediamtx", "newDevice", true, "err", err)
+				continue
+			}
+
+			svc.CamsProxyEventCh <- v1.CameraProxyEvent{
+				CameraPairedEvent: &v1.CameraPairedEvent{
+					UUID:      match.UUID,
+					StreamUrl: streamUrl,
+					Revision:  version,
+				},
+			}
 			if os.Getenv("ENV_TYPE") == "dev" {
 				// For testing the ui.
 				svc.SseChan <- v1.DiscoveryEvent{
@@ -89,25 +120,26 @@ func (svc *DiscoveryService) Discover(ctx context.Context) {
 	}
 }
 
-func (svc *DiscoveryService) hydrateDb(ctx context.Context, uuid string, addr string) uint8 {
+func (svc *DiscoveryService) hydrateDb(ctx context.Context, uuid string, addr string) (uint8, int) {
 	cam, err := svc.CamerasRepo.FindOne(ctx, uuid)
+	if pgxscan.NotFound(err) {
+		return hydrateNewDevice, cam.Version
+	}
 	if err != nil {
 		svc.Logger.Error(err.Error())
-		return hydrateErr
-	}
-
-	if cam == nil {
-		return hydrateNewDevice
+		return hydrateErr, -1
 	}
 
 	// if camera is already paired and the address has changed.
 	if cam.Addr != addr {
 		cam.Addr = addr
-		svc.CamerasRepo.Save(ctx, cam)
-		return hydrateUpdatedAddress
+		if err := svc.CamerasRepo.Save(ctx, cam); err != nil {
+			return hydrateErr, -1
+		}
+		return hydrateUpdatedAddress, cam.Version
 	}
 
-	return hydrateNone
+	return hydrateNone, cam.Version
 }
 
 func (svc *DiscoveryService) updateCache(ctx context.Context, uuid string, addr string) error {
