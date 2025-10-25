@@ -9,4 +9,5 @@ type Camera struct {
 	SerialNumber    string `json:"serial_number"`
 	HardwareId      string `json:"hardware_id"`
 	Addr            string `json:"addr"`
+	Version         int    `json:"version"`
 }

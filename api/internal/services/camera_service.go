@@ -10,6 +10,8 @@ import (
 	"tomerab.com/cam-hub/internal/api/v1/models"
 	v1 "tomerab.com/cam-hub/internal/contracts/v1"
 	dvripclient "tomerab.com/cam-hub/internal/dvrip"
+	inmemory "tomerab.com/cam-hub/internal/events/in_memory"
+	"tomerab.com/cam-hub/internal/mtxapi"
 	"tomerab.com/cam-hub/internal/onvif"
 	"tomerab.com/cam-hub/internal/onvif/device"
 	"tomerab.com/cam-hub/internal/repos"
@@ -20,9 +22,13 @@ const (
 )
 
 type CameraService struct {
-	CamRepo      repos.CameraRepoIface
-	CamCredsRepo repos.CameraCredsRepoIface
-	Logger       *slog.Logger
+	CamRepo            repos.CameraRepoIface
+	CamCredsRepo       repos.CameraCredsRepoIface
+	Rdms               repos.RedisIface
+	InMemCache         *inmemory.InMemoryPubSub
+	MtxClient          *mtxapi.MtxClient
+	CamsEventProxyChan chan v1.CameraProxyEvent
+	Logger             *slog.Logger
 }
 
 func (svc *CameraService) UpairCamera(ctx context.Context, uuid string) error {
@@ -43,9 +49,7 @@ func (svc *CameraService) UpairCamera(ctx context.Context, uuid string) error {
 		return err
 	}
 
-	client.DelUser(creds.Username)
-
-	return nil
+	return client.DelUser(creds.Username)
 }
 
 func getAddrWithoutPort(addr string) string {
@@ -155,6 +159,19 @@ func (svc *CameraService) Pair(ctx context.Context, uuid string, req v1.PairDevi
 		return nil, err
 	}
 
+	streamUrl, err := svc.MtxClient.Publish(ctx, uuid)
+	if err != nil {
+		return nil, err
+	}
+
+	svc.CamsEventProxyChan <- v1.CameraProxyEvent{
+		CameraPairedEvent: &v1.CameraPairedEvent{
+			UUID:      uuid,
+			StreamUrl: streamUrl,
+			Revision:  camera.Version,
+		},
+	}
+
 	svc.Logger.Info("Camera paired successfully", "uuid", uuid, "addr", req.Addr)
 	return camera, nil
 }
@@ -183,8 +200,9 @@ func (svc *CameraService) Unpair(ctx context.Context, uuid string) error {
 		return err
 	}
 
+	camAddrWithoutPort := strings.Split(cam.Addr, ":")[0]
 	dvripClient, err := dvripclient.New(
-		cam.Addr,
+		camAddrWithoutPort,
 		os.Getenv("CAMERA_GLOB_ADMIN_USERNAME"),
 		os.Getenv("CAMERA_GLOB_ADMIN_PASS"))
 	if err != nil {
@@ -199,6 +217,29 @@ func (svc *CameraService) Unpair(ctx context.Context, uuid string) error {
 
 	if err := dvripClient.DelUser(creds.Username); err != nil {
 		return err
+	}
+
+	if err := svc.MtxClient.Delete(ctx, uuid); err != nil {
+		return err
+	}
+
+	if err := svc.purgeCameraFromDataSources(ctx, uuid); err != nil {
+		return err
+	}
+
+	svc.CamsEventProxyChan <- v1.CameraProxyEvent{
+		CameraUnpairedEvent: &v1.CameraUnpairedEvent{
+			UUID: uuid,
+		},
+	}
+
+	return dvripClient.Reboot()
+}
+
+func (svc *CameraService) purgeCameraFromDataSources(ctx context.Context, uuid string) error {
+	svc.InMemCache.Purge(uuid)
+	if err := svc.Rdms.Del(ctx, fmt.Sprintf("cam:%s", uuid)); err != nil {
+		return fmt.Errorf("failed to delete from redis: %w", err)
 	}
 
 	return svc.CamRepo.Delete(ctx, uuid)

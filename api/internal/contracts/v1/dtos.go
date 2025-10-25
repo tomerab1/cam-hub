@@ -32,6 +32,11 @@ type CameraPairedEvent struct {
 	Revision  int    `json:"revision"`
 }
 
+type CameraProxyEvent struct {
+	CameraPairedEvent   *CameraPairedEvent
+	CameraUnpairedEvent *CameraUnpairedEvent
+}
+
 type AnalyzeImgsEvent struct {
 	UUID       string   `json:"uuid"`
 	Tp         string   `json:"tp"`

@@ -38,8 +38,8 @@ func (repo *PgxCameraRepo) Begin(ctx context.Context) (pgx.Tx, error) {
 func (repo *PgxCameraRepo) UpsertCameraTx(ctx context.Context, tx pgx.Tx, cam *models.Camera) error {
 	_, err := tx.Exec(ctx, `
 		INSERT INTO cameras (
-			id, name, manufacturer, model, firmware_version, serial_number, hardware_id, addr
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+			id, name, manufacturer, model, firmware_version, serial_number, hardware_id, addr, version
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
 		ON CONFLICT (id) DO UPDATE SET
 			name = EXCLUDED.name,
 			manufacturer = EXCLUDED.manufacturer,
@@ -47,7 +47,8 @@ func (repo *PgxCameraRepo) UpsertCameraTx(ctx context.Context, tx pgx.Tx, cam *m
 			firmware_version = EXCLUDED.firmware_version,
 			serial_number = EXCLUDED.serial_number,
 			hardware_id = EXCLUDED.hardware_id,
-			addr = EXCLUDED.addr
+			addr = EXCLUDED.addr,
+			version = cameras.version + 1
 	`,
 		cam.UUID,
 		cam.CameraName,
@@ -57,6 +58,7 @@ func (repo *PgxCameraRepo) UpsertCameraTx(ctx context.Context, tx pgx.Tx, cam *m
 		cam.SerialNumber,
 		cam.HardwareId,
 		cam.Addr,
+		cam.Version,
 	)
 
 	return err
@@ -65,8 +67,8 @@ func (repo *PgxCameraRepo) UpsertCameraTx(ctx context.Context, tx pgx.Tx, cam *m
 func (repo *PgxCameraRepo) UpsertCamera(ctx context.Context, cam *models.Camera) error {
 	_, err := repo.DB.Exec(ctx, `
 		INSERT INTO cameras (
-			id, name, manufacturer, model, firmware_version, serial_number, hardware_id, addr
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+			id, name, manufacturer, model, firmware_version, serial_number, hardware_id, addr, version
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
 		ON CONFLICT (id) DO UPDATE SET
 			name = EXCLUDED.name,
 			manufacturer = EXCLUDED.manufacturer,
@@ -74,7 +76,8 @@ func (repo *PgxCameraRepo) UpsertCamera(ctx context.Context, cam *models.Camera)
 			firmware_version = EXCLUDED.firmware_version,
 			serial_number = EXCLUDED.serial_number,
 			hardwareId = EXCLUDED.hardware_id,
-			addr = EXCLUDED.addr
+			addr = EXCLUDED.addr,
+			version = cameras.version + 1
 	`,
 		cam.UUID,
 		cam.CameraName,
@@ -84,6 +87,7 @@ func (repo *PgxCameraRepo) UpsertCamera(ctx context.Context, cam *models.Camera)
 		cam.SerialNumber,
 		cam.HardwareId,
 		cam.Addr,
+		cam.Version,
 	)
 
 	return err
@@ -130,7 +134,8 @@ func (repo *PgxCameraRepo) FindOne(ctx context.Context, uuid string) (*models.Ca
 													firmware_version,
 													serial_number,
 													hardware_id,
-													addr
+													addr,
+													version
 												FROM cameras
 												WHERE id = $1`, uuid)
 
@@ -139,17 +144,18 @@ func (repo *PgxCameraRepo) FindOne(ctx context.Context, uuid string) (*models.Ca
 
 func (repo *PgxCameraRepo) Save(ctx context.Context, cam *models.Camera) error {
 	tag, err := repo.DB.Exec(ctx, `UPDATE cameras
-		SET id = $1,
+		SET
 			name = $2,
 			manufacturer = $3,
 			model = $4,
 			firmware_version = $5,
 			serial_number = $6,
 			hardware_id = $7,
-			addr = $8
-		WHERE id = $1
+			addr = $8,
+			version = version + 1
+		WHERE id = $1 and version = $9
 	`, cam.UUID, cam.CameraName, cam.Manufacturer, cam.Model, cam.FirmwareVersion, cam.SerialNumber,
-		cam.HardwareId, cam.Addr)
+		cam.HardwareId, cam.Addr, cam.Version)
 
 	if tag.RowsAffected() != 1 {
 		return fmt.Errorf("save failed: no rows were affected (id=%s)", cam.UUID)
@@ -160,8 +166,11 @@ func (repo *PgxCameraRepo) Save(ctx context.Context, cam *models.Camera) error {
 
 func (repo *PgxCameraRepo) Delete(ctx context.Context, uuid string) error {
 	tag, err := repo.DB.Exec(ctx, `DELETE FROM cameras WHERE id = $1`, uuid)
+	if err != nil {
+		return err
+	}
 
-	if !tag.Delete() {
+	if tag.RowsAffected() != 1 {
 		return fmt.Errorf("failed to delete camera with uuid=%s", uuid)
 	}
 
@@ -178,8 +187,10 @@ func (repo *PgxCameraRepo) FindMany(ctx context.Context, offset, limit int) ([]*
 													firmware_version,
 													serial_number,
 													hardware_id,
-													addr
+													addr,
+													version
 												FROM cameras
+												ORDER BY created_at DESC, id
 												LIMIT $1 OFFSET $2
 												`, limit, offset)
 	return cams, err

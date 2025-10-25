@@ -49,6 +49,7 @@ func getDiscoveredDevices(app *application.Application) http.HandlerFunc {
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer cancel()
 		discovered := onvif.DiscoverNewCameras(ctx, app.Logger)
+		app.DiscoveryService.Discover(r.Context())
 
 		filteredMatches, err := filterUUIDS(ctx, app.CameraService.CamRepo, discovered.Matches)
 		if err != nil {

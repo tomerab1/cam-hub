@@ -64,6 +64,8 @@ export function CameraProvider({ children }: { children: React.ReactNode }) {
 
 	const upsert = (cam: Partial<CameraDto> & { uuid: string }) => {
 		setCameraDtos((prev) => {
+			if (!prev) return prev;
+
 			const i = prev.findIndex((c) => c.uuid === cam.uuid);
 			if (i === -1)
 				return [
@@ -76,7 +78,6 @@ export function CameraProvider({ children }: { children: React.ReactNode }) {
 						serial_number: cam.serial_number ?? "",
 						hardware_id: cam.hardware_id ?? "",
 						addr: cam.addr ?? "",
-						is_paired: cam.is_paired ?? false,
 					},
 					...prev,
 				];

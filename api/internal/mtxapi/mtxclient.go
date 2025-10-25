@@ -78,8 +78,8 @@ func (client *MtxClient) Publish(ctx context.Context, uuid string) (string, erro
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("Content-Type", "application/json")
 
+	req.Header.Set("Content-Type", "application/json")
 	resp, err := client.HttpClient.Do(req)
 	if err != nil {
 		return "", err

@@ -57,7 +57,6 @@ func DiscoverNewCameras(ctx context.Context, logger *slog.Logger) discovery.WsDi
 			)
 
 			if err != nil {
-				logger.Debug("wsdiscovery probe failed", "iface", name, "err", err)
 				return nil
 			}
 

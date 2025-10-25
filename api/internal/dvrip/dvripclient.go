@@ -11,6 +11,7 @@ const (
 	cmdConfigSet              = 1040
 	cmdConfigGet              = 1042
 	cmdDelUser                = 1486
+	cmdOpMachine              = 1450
 	dialTemplate              = "dvrip://%s:%s@%s:34567"
 	ModeAuto        LightMode = "Auto"
 	ModeNone        LightMode = "None"
@@ -36,7 +37,6 @@ type networkInfo struct {
 
 func New(camAddr, username, pass string) (*DvripClient, error) {
 	var cli DvripClient
-	fmt.Println(camAddr, username, pass)
 	if err := cli.client.Dial(fmt.Sprintf(dialTemplate, username, pass, camAddr)); err != nil {
 		_ = cli.client.Close()
 		return nil, fmt.Errorf("dial: %w", err)
@@ -122,46 +122,45 @@ func (cli *DvripClient) SetLightMode(params LightModeParams) error {
 	return nil
 }
 
-func (cli *DvripClient) getNetworkInfo() (*networkInfo, error) {
-	node, err := cli.Get("NetWork.NetCommon")
-	if err != nil {
-		return nil, err
-	}
-
-	var hostHex, gatewayHex, submaskHex string
-	if val, ok := node["HostIP"].(string); ok {
-		hostHex = val
-	}
-	if val, ok := node["GateWay"].(string); ok {
-		gatewayHex = val
-	}
-	if val, ok := node["Submask"].(string); ok {
-		submaskHex = val
-	}
-
-	return &networkInfo{
-		hostHex:    hostHex,
-		gatewayHex: gatewayHex,
-		submaskHex: submaskHex,
-	}, nil
-}
-
 func (cli *DvripClient) PairWifi(ssid, psk string) error {
 	node, err := cli.Get("NetWork.Wifi")
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get Wifi: %w", err)
 	}
 
-	netInfo, err := cli.getNetworkInfo()
+	if err := cli.setWifiPairingInfo(node, ssid, psk); err != nil {
+		return fmt.Errorf("failed to set Wifi: %w", err)
+	}
+
+	return nil
+}
+
+func (cli *DvripClient) Reboot() error {
+	payload := map[string]any{
+		"Name": "OPMachine",
+		"OPMachine": map[string]any{
+			"Action": "Reboot",
+		},
+	}
+	b, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
 
-	if err := cli.setWifiPairingInfo(node, ssid, psk, netInfo); err != nil {
+	if _, err = cli.client.WriteCmd(cmdOpMachine, b); err != nil {
 		return err
 	}
 
-	return cli.verifyWifiPairing(ssid, psk, netInfo)
+	resp, err := cli.client.ReadJSON()
+	if err != nil {
+		return fmt.Errorf("read reboot ack: %w", err)
+	}
+
+	if v, ok := resp["Ret"].(float64); ok && int(v) != 100 {
+		return fmt.Errorf("reboot rejected, Ret=%d", int(v))
+	}
+
+	return nil
 }
 
 func (cli *DvripClient) verifyWifiPairing(
@@ -191,14 +190,10 @@ func (cli *DvripClient) setWifiPairingInfo(
 	node map[string]any,
 	ssid,
 	psk string,
-	netInfo *networkInfo,
 ) error {
 	node["Enable"] = true
 	node["SSID"] = ssid
 	node["Keys"] = psk
-	node["HostIP"] = netInfo.hostHex
-	node["GateWay"] = netInfo.gatewayHex
-	node["Submask"] = netInfo.submaskHex
 
 	return cli.Set("NetWork.Wifi", node)
 }

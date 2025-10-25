@@ -29,6 +29,12 @@ func (mem *InMemoryPubSub) Subscribe(uuid string) chan []byte {
 	return ch
 }
 
+func (mem *InMemoryPubSub) Purge(uuid string) {
+	mem.mtx.Lock()
+	defer mem.mtx.Unlock()
+	delete(mem.store, uuid)
+}
+
 func (mem *InMemoryPubSub) Unsubscribe(uuid string, ch chan []byte) {
 	mem.mtx.Lock()
 	defer mem.mtx.Unlock()
