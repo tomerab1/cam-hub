@@ -159,7 +159,7 @@ func (svc *CameraService) Pair(ctx context.Context, uuid string, req v1.PairDevi
 		return nil, err
 	}
 
-	streamUrl, err := svc.MtxClient.Publish(ctx, uuid)
+	_, err = svc.MtxClient.Publish(ctx, uuid)
 	if err != nil {
 		return nil, err
 	}
@@ -167,7 +167,7 @@ func (svc *CameraService) Pair(ctx context.Context, uuid string, req v1.PairDevi
 	svc.CamsEventProxyChan <- v1.CameraProxyEvent{
 		CameraPairedEvent: &v1.CameraPairedEvent{
 			UUID:      uuid,
-			StreamUrl: streamUrl,
+			StreamUrl: fmt.Sprintf("rtsp://localhost:8554/%s", uuid),
 			Revision:  camera.Version,
 		},
 	}

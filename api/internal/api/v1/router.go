@@ -23,8 +23,6 @@ func LoadRoutes(app *application.Application) *chi.Mux {
 		rt.Post("/{uuid}/ptz/move", moveCamera(app))
 	})
 
-	r.Get("/test", playground(app))
-
 	r.Get("/events/discovery", discoverySSE(app))
 	r.Get("/events/recordings/{uuid}", alertsSSE(app))
 

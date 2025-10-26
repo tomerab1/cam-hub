@@ -21,6 +21,7 @@ type ExitEvent struct {
 type CtrlEvent struct {
 	Kind    CtrlKind
 	CamUUID string
+	Rev     int
 	Args    Args
 }
 

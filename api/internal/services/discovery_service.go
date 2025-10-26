@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"time"
@@ -73,7 +74,7 @@ func (svc *DiscoveryService) Discover(ctx context.Context) {
 				At:   time.Now(),
 			}
 
-			streamUrl, err := svc.MtxClient.Publish(ctx, match.UUID)
+			_, err := svc.MtxClient.Publish(ctx, match.UUID)
 			if err != nil {
 				svc.Logger.Warn("failed to publish stream to mediamtx", "newDevice", true, "err", err)
 				continue
@@ -82,7 +83,7 @@ func (svc *DiscoveryService) Discover(ctx context.Context) {
 			svc.CamsProxyEventCh <- v1.CameraProxyEvent{
 				CameraPairedEvent: &v1.CameraPairedEvent{
 					UUID:      match.UUID,
-					StreamUrl: streamUrl,
+					StreamUrl: fmt.Sprintf("rtsp://localhost:8554/%s", match.UUID),
 					Revision:  version,
 				},
 			}
@@ -94,7 +95,7 @@ func (svc *DiscoveryService) Discover(ctx context.Context) {
 				At:   time.Now(),
 			}
 		default:
-			streamUrl, err := svc.MtxClient.Publish(ctx, match.UUID)
+			_, err := svc.MtxClient.Publish(ctx, match.UUID)
 			if err != nil {
 				svc.Logger.Warn("failed to publish stream to mediamtx", "newDevice", true, "err", err)
 				continue
@@ -103,7 +104,7 @@ func (svc *DiscoveryService) Discover(ctx context.Context) {
 			svc.CamsProxyEventCh <- v1.CameraProxyEvent{
 				CameraPairedEvent: &v1.CameraPairedEvent{
 					UUID:      match.UUID,
-					StreamUrl: streamUrl,
+					StreamUrl: fmt.Sprintf("rtsp://localhost:8554/%s", match.UUID),
 					Revision:  version,
 				},
 			}

@@ -44,7 +44,7 @@ func (visor *Supervisor) Run(ctx context.Context) {
 		case ev := <-visor.ctrlCh:
 			switch ev.Kind {
 			case CtrlRegister:
-				visor.Register(ev.CamUUID, ev.Args)
+				visor.Register(ev.CamUUID, ev.Rev, ev.Args)
 			case CtrlUnregister:
 				visor.Unregister(ev.CamUUID)
 			case CtrlShutdown:
@@ -75,7 +75,7 @@ func (visor *Supervisor) NotifyCtrl(ev CtrlEvent) {
 	visor.ctrlCh <- ev
 }
 
-func (visor *Supervisor) Register(camUUID string, args Args) {
+func (visor *Supervisor) Register(camUUID string, rev int, args Args) {
 	if visor.findProc(camUUID) != nil {
 		visor.logger.Info("register: process for camera is already running", "uuid", camUUID)
 		return
@@ -101,7 +101,7 @@ func (visor *Supervisor) Register(camUUID string, args Args) {
 	visor.procs[camUUID] = &Proc{
 		procArgs: args,
 		cmd:      cmd,
-		Version:  1,
+		Version:  rev,
 	}
 
 	go func() {

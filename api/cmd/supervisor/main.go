@@ -68,6 +68,7 @@ func main() {
 			supervisor.NotifyCtrl(visor.CtrlEvent{
 				Kind:    visor.CtrlRegister,
 				CamUUID: ev.UUID,
+				Rev:     ev.Revision,
 				Args: []string{
 					"run", "./cmd/motion_detection",
 					"-addr", ev.StreamUrl,
@@ -84,6 +85,7 @@ func main() {
 			supervisor.NotifyCtrl(visor.CtrlEvent{
 				Kind:    visor.CtrlRegister,
 				CamUUID: ev.UUID,
+				Rev:     ev.Revision,
 				Args:    []string{"-addr", ev.StreamUrl},
 			})
 		}

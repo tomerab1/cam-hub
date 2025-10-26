@@ -12,12 +12,16 @@ import (
 	"tomerab.com/cam-hub/internal/api"
 	"tomerab.com/cam-hub/internal/application"
 	v1 "tomerab.com/cam-hub/internal/contracts/v1"
-	dvripclient "tomerab.com/cam-hub/internal/dvrip"
 	"tomerab.com/cam-hub/internal/onvif"
 	"tomerab.com/cam-hub/internal/onvif/discovery"
 	"tomerab.com/cam-hub/internal/repos"
 )
 
+// filterUUIDS filters out discovered cameras that are already paired in the system.
+// It takes a context, a camera repository interface, and a slice of WsDiscoveryMatch objects containing discovered cameras.
+// The function extracts UUIDs from matches, checks which ones already exist in the database through the camera repository,
+// and returns a filtered slice containing only unpaired cameras.
+// Returns filtered matches slice and any error encountered during the database lookup.
 func filterUUIDS(ctx context.Context, camRepo repos.CameraRepoIface, matches []discovery.WsDiscoveryMatch) ([]discovery.WsDiscoveryMatch, error) {
 	var uuids []string
 
@@ -44,6 +48,23 @@ func filterUUIDS(ctx context.Context, camRepo repos.CameraRepoIface, matches []d
 	return filtered, err
 }
 
+// getDiscoveredDevices creates an HTTP handler function that discovers ONVIF cameras on the network.
+// It performs both ONVIF WS-Discovery and internal discovery service operations.
+//
+// The handler:
+// - Executes WS-Discovery with a 5 second timeout
+// - Triggers the application's discovery service
+// - Filters out already known devices by UUID
+// - Returns the filtered discovery results as JSON
+//
+// Parameters:
+//   - app: Application instance containing required services and dependencies
+//
+// Returns:
+//   - http.HandlerFunc that handles the device discovery endpoint
+//
+// The response contains a WsDiscoveryDto with filtered matches of discovered devices.
+// On error, returns a 500 Internal Server Error.
 func getDiscoveredDevices(app *application.Application) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
@@ -61,6 +82,18 @@ func getDiscoveredDevices(app *application.Application) http.HandlerFunc {
 	}
 }
 
+// pairCamera creates an HTTP handler function that pairs a camera.
+//
+// The handler:
+// - Extracts the cameras uuid from the uri.
+// - Calls CameraService Pair method.
+//
+// Parameters:
+//   - app: Application instance containing required services and dependencies
+//
+// The response contains the camera model, returns HTTP status 201.
+// On error, Returns a bad request error if the request is malformed.
+// Returns an InternalServerError (500) otherwise.
 func pairCamera(app *application.Application) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req v1.PairDeviceReq
@@ -127,26 +160,6 @@ func discoverySSE(app *application.Application) http.HandlerFunc {
 			case <-ctx.Done():
 				return
 			}
-		}
-	}
-}
-
-func playground(app *application.Application) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		client, err := dvripclient.New("10.0.0.7", "tomer", "123456")
-		if err != nil {
-			http.Error(w, fmt.Sprintf("error creating client: %s", err.Error()), http.StatusInternalServerError)
-			return
-		}
-		defer client.Close()
-
-		if err := client.Set("Camera.WhiteLight", map[string]any{"WorkMode": "Intelligent"}); err != nil {
-			http.Error(w, fmt.Sprintf("error creating client: %s", err.Error()), http.StatusInternalServerError)
-			return
-		}
-
-		if resp, err := client.Get("Camera.WhiteLight"); err == nil {
-			fmt.Println(resp)
 		}
 	}
 }

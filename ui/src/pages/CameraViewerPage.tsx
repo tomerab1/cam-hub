@@ -46,7 +46,7 @@ export default function CameraViewerPage() {
 		(async () => {
 			try {
 				const url = await getStreamUrl(cameraUUID);
-				if (mounted) setStreamUrl(url);
+				if (mounted) setStreamUrl(url + "/whep");
 				if (mounted && !url) setErr("Stream URL unavailable.");
 			} catch (e) {
 				console.error(e);

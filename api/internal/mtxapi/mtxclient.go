@@ -51,7 +51,7 @@ type MtxErrorDto struct {
 }
 
 func (client *MtxClient) Publish(ctx context.Context, uuid string) (string, error) {
-	whepURL := fmt.Sprintf("http://%s:8889/%s/whep", os.Getenv("MEDIAMTX_HOST"), uuid)
+	whepURL := fmt.Sprintf("http://%s:8889/%s", os.Getenv("MEDIAMTX_HOST"), uuid)
 	if client.doesStreamExists(ctx, uuid) {
 		return whepURL, nil
 	}

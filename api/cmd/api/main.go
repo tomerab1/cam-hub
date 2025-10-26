@@ -89,6 +89,14 @@ func main() {
 
 	camRepo := repos.NewPgxCameraRepo(dbpool)
 	ptzRepo := repos.NewPgxPtzTokenRepo(dbpool)
+	credsRepo := repos.NewPgxCameraCredsRepo(dbpool)
+
+	mtxClient := &mtxapi.MtxClient{
+		Logger:       mtxServiceLogger,
+		CamRepo:      camRepo,
+		CamCredsRepo: credsRepo,
+		HttpClient:   &httpClient,
+	}
 
 	sseChan := make(chan v1.DiscoveryEvent, 24)
 	camsEventProxyChan := make(chan v1.CameraProxyEvent, 8)
@@ -97,6 +105,7 @@ func main() {
 			Rdb:    rdb,
 			Logger: redisRepoLogger,
 		},
+		MtxClient:        mtxClient,
 		CamerasRepo:      camRepo,
 		Sched:            sched,
 		Logger:           discoveryServiceLogger,
@@ -109,7 +118,6 @@ func main() {
 	}
 	dscSvc.Sched.Start()
 
-	credsRepo := repos.NewPgxCameraCredsRepo(dbpool)
 	bus, err := rabbitmq.NewBus(os.Getenv("RABBITMQ_ADDR"))
 	if err != nil {
 		panic(err.Error())
@@ -119,13 +127,6 @@ func main() {
 		panic(err.Error())
 	}
 	inMemPubSub := inmemory.NewInMemoryPubSub()
-
-	mtxClient := &mtxapi.MtxClient{
-		Logger:       mtxServiceLogger,
-		CamRepo:      camRepo,
-		CamCredsRepo: credsRepo,
-		HttpClient:   &httpClient,
-	}
 
 	app := &application.Application{
 		Logger:             appLogger,

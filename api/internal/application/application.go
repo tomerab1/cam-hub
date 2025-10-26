@@ -66,7 +66,6 @@ func (app *Application) publishPairedCamsJob(ctx context.Context) error {
 			}
 		}
 	}
-
 }
 
 func (app *Application) publishEvent(ctx context.Context, key string, ev *v1.CameraProxyEvent) error {
