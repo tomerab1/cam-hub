@@ -176,6 +176,7 @@ func (analyzer *FrameAnalyzer) minioMoveObjects(whereToStore string, ev *v1.Anal
 
 func (analyzer *FrameAnalyzer) onAnalyze(ev *v1.AnalyzeImgsEvent) error {
 	const OUTPUT_NAME = "detection_out"
+	var stagingKey = os.Getenv("MINIO_STAGING_KEY")
 
 	tensor, err := analyzer.buildTensor(ev.FramePaths)
 	if err != nil {
@@ -218,8 +219,8 @@ func (analyzer *FrameAnalyzer) onAnalyze(ev *v1.AnalyzeImgsEvent) error {
 
 	req := v1.AddRecordingReq{
 		BucketName:         os.Getenv("MINIO_BUCKET_NAME"),
-		VidBucketKey:       path.Join(whereToStore, ev.VidPath),
-		BestFrameBucketKey: path.Join(whereToStore, ev.FramePaths[tensorData.imageIndex]),
+		VidBucketKey:       path.Join(whereToStore, strings.TrimPrefix(ev.VidPath, stagingKey)),
+		BestFrameBucketKey: path.Join(whereToStore, strings.TrimPrefix(ev.FramePaths[tensorData.imageIndex], stagingKey)),
 		Evidence:           tensorData.evidence,
 		Score:              tensorData.maxConf,
 		RetentionDays:      retentionDays,
