@@ -6,6 +6,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"tomerab.com/cam-hub/internal/application"
+	v1 "tomerab.com/cam-hub/internal/contracts/v1"
 )
 
 func LoadRoutes(app *application.Application) *chi.Mux {
@@ -18,9 +19,9 @@ func LoadRoutes(app *application.Application) *chi.Mux {
 		rt.Get("/{uuid}/stream", getCameraStream(app))
 		rt.Delete("/{uuid}/stream", deleteCameraStream(app))
 		rt.Get("/", getCameras(app))
-		rt.Post("/{uuid}/pair", pairCamera(app))
 		rt.Delete("/{uuid}/pair", unpairCamera(app))
-		rt.Post("/{uuid}/ptz/move", moveCamera(app))
+		rt.With(validationMiddleware[v1.PairDeviceReq]).Post("/{uuid}/pair", pairCamera(app))
+		rt.With(validationMiddleware[v1.MoveCameraReq]).Post("/{uuid}/ptz/move", moveCamera(app))
 	})
 
 	r.Get("/events/discovery", discoverySSE(app))

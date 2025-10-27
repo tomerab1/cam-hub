@@ -12,8 +12,8 @@ var (
 )
 
 type Vec2D struct {
-	X float64 `json:"x"`
-	Y float64 `json:"y"`
+	X float64 `json:"x" validate:"gte=-1,lte=1"`
+	Y float64 `json:"y" validate:"gte=-1,lte=1"`
 }
 
 type Pair[T, U any] struct {

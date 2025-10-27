@@ -7,16 +7,16 @@ import (
 )
 
 type PairDeviceReq struct {
-	Addr         string `json:"addr"`
-	CameraName   string `json:"camera_name"`
-	Username     string `json:"username"`
-	Password     string `json:"password"`
-	WifiName     string `json:"wifi_name"`     // SSID
-	WifiPassword string `json:"wifi_password"` // PSK
+	Addr         string `json:"addr" validate:"required,hostname_port"`
+	CameraName   string `json:"camera_name" validate:"required,min=1"`
+	Username     string `json:"username" validate:"required,min=1"`
+	Password     string `json:"password" validate:"required,min=4,max=8"`
+	WifiName     string `json:"wifi_name" validate:"omitempty,min=1"`     // SSID
+	WifiPassword string `json:"wifi_password" validate:"omitempty,min=1"` // PSK
 }
 
 type UnpairDeviceReq struct {
-	UUID string `json:"uuid"`
+	UUID string `json:"uuid" validate:"required,uuid"`
 }
 
 type DiscoveryEvent struct {
@@ -53,8 +53,8 @@ type CameraStreamUrl struct {
 }
 
 type MoveCameraReq struct {
-	Translation *utils.Vec2D `json:"translation"`
-	Zoom        *float32     `json:"zoom"`
+	Translation *utils.Vec2D `json:"translation" validate:"omitempty,dive"`
+	Zoom        *float32     `json:"zoom" validate:"omitempty,gte=-1,lte=1"`
 }
 
 type Evidence struct {

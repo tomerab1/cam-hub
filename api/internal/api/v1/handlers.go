@@ -96,18 +96,13 @@ func getDiscoveredDevices(app *application.Application) http.HandlerFunc {
 // Returns an InternalServerError (500) otherwise.
 func pairCamera(app *application.Application) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var req v1.PairDeviceReq
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		defer r.Body.Close()
-
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer cancel()
 
+		body := getValidatedBody[v1.PairDeviceReq](r)
 		uuid := r.PathValue("uuid")
-		camera, err := app.CameraService.Pair(ctx, uuid, req)
+
+		camera, err := app.CameraService.Pair(ctx, uuid, body)
 		if err != nil {
 			serverError(w, r, err, app.Logger)
 			return
@@ -266,28 +261,15 @@ func deleteCameraStream(app *application.Application) http.HandlerFunc {
 
 func moveCamera(app *application.Application) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
-			return
-		}
+		body := getValidatedBody[v1.MoveCameraReq](r)
 
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer cancel()
 
-		defer r.Body.Close()
-		dec := json.NewDecoder(r.Body)
-		dec.DisallowUnknownFields()
-
 		uuid := r.PathValue("uuid")
-		var req v1.MoveCameraReq
-		if err := dec.Decode(&req); err != nil {
-			app.WriteJSON(w, r, api.ErrorEnvp{"error": err.Error()}, http.StatusBadRequest)
-			return
-		}
-
 		dto := v1.MoveCameraReq{
-			Translation: req.Translation,
-			Zoom:        req.Zoom,
+			Translation: body.Translation,
+			Zoom:        body.Zoom,
 		}
 
 		if err := app.PtzService.MoveCamera(ctx, uuid, dto); err != nil {
