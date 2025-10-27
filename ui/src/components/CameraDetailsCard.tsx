@@ -70,11 +70,6 @@ export default function CameraDetailsCard({
 						alignItems="center"
 						flexWrap="wrap"
 					>
-						<Chip
-							label={camera?.is_paired ? "Paired" : "Unpaired"}
-							color={camera?.is_paired ? "success" : "default"}
-							size="small"
-						/>
 						{camera?.addr && (
 							<Chip label={camera.addr} size="small" variant="outlined" />
 						)}
